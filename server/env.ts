@@ -355,11 +355,11 @@ function mcpServers(db: Db, claudeJson: Json | null, roots: { root: string; name
     const name = String(r.mcp_server)
     if (!servers.has(name)) {
       const scope = UUID.test(name)
-        ? 'claude.ai bağlayıcısı'
+        ? 'claude.ai connector'
         : name.startsWith('ccd_') || DESKTOP_SERVERS.has(name)
           ? 'Desktop uygulaması'
           : name.startsWith('plugin_')
-            ? 'Eklenti'
+            ? 'Plugin'
             : 'Yapılandırma bulunamadı'
       servers.set(name, { name, scope, transport: null, target: null, calls: 0, errors: 0, lastUsedAt: null, topTools: [] })
     }

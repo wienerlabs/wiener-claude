@@ -126,7 +126,7 @@ export function Replay({ id, focusKey = null }: { id: string; focusKey?: string 
           Bu oturumun dökümü artık diskte yok. Claude Code eski dökümleri bir süre sonra siler; yukarıdaki sayılar Wiener Tools'un indeksinden geliyor.
         </p>
       ) : null}
-      {!missing && total === 0 ? <p className="text-ink-2">Bu oturumda henüz bir istem yok.</p> : null}
+      {!missing && total === 0 ? <p className="text-ink-2">Bu oturumda henüz bir prompt yok.</p> : null}
       {focusKey && focusTurn === null && !missing && total > 0 ? (
         <p className="text-[13px] text-ink-2">Aranan mesaj bu dökümde bulunamadı; oturum baştan gösteriliyor.</p>
       ) : null}
@@ -176,7 +176,7 @@ function Header({ s }: { s: SessionRow }) {
       </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
         <Stat label="Aktif süre" value={fmtDuration(s.activeMs)} />
-        <Stat label="Mesaj" value={fmtInt(s.messages)} note={`${fmtInt(s.prompts)} istem`} />
+        <Stat label="Mesaj" value={fmtInt(s.messages)} note={`${fmtInt(s.prompts)} prompt`} />
         <Stat
           label="Araç çağrısı"
           value={fmtInt(s.toolCalls)}
@@ -233,7 +233,7 @@ const Turn = memo(function Turn({ turn, focused, focusKey }: { turn: ReplayTurn;
         ))}
         {turn.cost > 0 || turn.toolCalls > 0 || turn.errors > 0 ? (
           <p className="pl-1 font-mono text-[11px] text-ink-3 num">
-            {fmtUsd(turn.cost)} · {fmtCompact(turn.outputTokens)} çıktı token
+            {fmtUsd(turn.cost)} · {fmtCompact(turn.outputTokens)} output token
             {turn.toolCalls ? ` · ${turn.toolCalls} araç` : ''}
             {turn.errors ? <span className="text-danger"> · {turn.errors} hata</span> : null}
           </p>
@@ -300,7 +300,7 @@ function Item({ item, open = false }: { item: ReplayItem; open?: boolean }) {
       return (
         <div className="flex items-center gap-3 py-1 text-[12px] text-ink-3" role="separator">
           <span className="h-px flex-1 bg-line" />
-          Bağlam özetlendi{item.preTokens ? ` · ${fmtCompact(item.preTokens)} token` : ''}
+          Compact: konuşma özetlendi{item.preTokens ? ` · ${fmtCompact(item.preTokens)} token` : ''}
           {item.trigger === 'manual' ? ' · elle' : item.trigger === 'auto' ? ' · otomatik' : ''}
           <span className="h-px flex-1 bg-line" />
         </div>
@@ -331,7 +331,7 @@ function ToolCall({ item, open }: { item: Extract<ReplayItem, { type: 'tool' }>;
         </span>
       </summary>
       <div className="space-y-2 border-t border-line px-3 py-2">
-        <Block label="Girdi" text={item.input} />
+        <Block label="Input" text={item.input} />
         {item.result ? <Block label={failed ? 'Hata' : 'Sonuç'} text={item.result.text || '(boş)'} danger={!!failed} /> : null}
       </div>
     </details>

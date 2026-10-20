@@ -147,7 +147,7 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
           <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-dashed border-line text-center">
             <div className="max-w-[36ch] space-y-1 px-6">
               <p className="font-medium">Bir oturum seç</p>
-              <p className="text-[13px] text-ink-2">Soldan bir oturum seçince istemler, Claude'un yanıtları ve araç çağrıları sırasıyla burada görünür.</p>
+              <p className="text-[13px] text-ink-2">Soldan bir oturum seçince prompt'lar, Claude'un yanıtları ve araç çağrıları sırasıyla burada görünür.</p>
             </div>
           </div>
         )}

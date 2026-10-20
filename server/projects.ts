@@ -1,6 +1,8 @@
 import os from 'node:os'
 import type { ProjectDetail, ProjectFile, ProjectSummary, RangeKey } from '../shared/types.ts'
+import { costSeries } from './costs.ts'
 import type { Db } from './db.ts'
+import { languageShares, mainLanguage } from './languages.ts'
 import { normalizeModel } from './pricing.ts'
 import { rangeBounds } from './range.ts'
 import { addDays, today } from './time.ts'
@@ -62,6 +64,15 @@ export function projectList(db: Db, rangeKey: RangeKey = 'all'): ProjectSummary[
       SELECT session_id, day FROM prompts WHERE day >= ?1
       UNION ALL SELECT session_id, day FROM api_calls WHERE is_sidechain = 0 AND day >= ?1
     ) f JOIN sessions s ON s.id = f.session_id GROUP BY s.project_key, f.day`).all(stripFrom) as Row[]
+  const editRows = new Map<string, { path: string; lines: number; edits: number }[]>()
+  for (const r of db.prepare(`SELECT s.project_key AS key, f.path AS path, sum(f.added + f.removed) AS lines, count(*) AS edits
+      FROM file_edits f JOIN sessions s ON s.id = f.session_id WHERE f.day BETWEEN ? AND ? GROUP BY s.project_key, f.path`)
+    .all(range.from, range.to) as Row[]) {
+    const key = String(r.key)
+    const list = editRows.get(key) ?? []
+    list.push({ path: String(r.path), lines: n(r.lines), edits: n(r.edits) })
+    editRows.set(key, list)
+  }
   const strips = new Map<string, number[]>()
   const dayIndex = (day: string) => Math.round((Date.parse(`${day}T12:00:00`) - Date.parse(`${stripFrom}T12:00:00`)) / 86_400_000)
   for (const r of daily) {
@@ -88,6 +99,7 @@ export function projectList(db: Db, rangeKey: RangeKey = 'all'): ProjectSummary[
         rangeMessages: messages.get(key) ?? 0,
         strip: strips.get(key) ?? new Array<number>(STRIP_DAYS).fill(0),
         topFiles: files(db, key, range.from, range.to, 3).map((f) => f.path),
+        language: mainLanguage(languageShares(editRows.get(key) ?? [])),
       }
     })
     .filter((p) => rangeKey === 'all' || p.rangeMessages > 0 || p.rangeCost > 0)
@@ -126,9 +138,39 @@ export function projectDetail(db: Db, key: string, rangeKey: RangeKey = 'all'): 
     byModel.set(m, (byModel.get(m) ?? 0) + n(r.cost))
   }
 
+  const named = (sql: string) => (db.prepare(sql).all(p) as Row[]).map((r) => ({ name: String(r.name), calls: n(r.calls) }))
+  const agents = named(`SELECT detail AS name, count(*) AS calls FROM tool_uses
+    WHERE name IN ('Agent', 'Task') AND detail IS NOT NULL AND ${inProject} AND ${inRange} GROUP BY detail ORDER BY calls DESC LIMIT 8`)
+  const skills = named(`SELECT detail AS name, count(*) AS calls FROM tool_uses
+    WHERE name = 'Skill' AND detail IS NOT NULL AND ${inProject} AND ${inRange} GROUP BY detail ORDER BY calls DESC LIMIT 8`)
+  const mcp = named(`SELECT mcp_server AS name, count(*) AS calls FROM tool_uses
+    WHERE mcp_server IS NOT NULL AND ${inProject} AND ${inRange} GROUP BY mcp_server ORDER BY calls DESC LIMIT 8`)
+  const subagentCost = n((db.prepare(`SELECT COALESCE(sum(cost), 0) AS c FROM api_calls WHERE is_sidechain = 1 AND ${inProject} AND ${inRange}`).get(p) as Row).c)
+
+  const languages = languageShares(
+    (db.prepare(`SELECT path, sum(added + removed) AS lines, count(*) AS edits FROM file_edits WHERE ${inProject} AND ${inRange} GROUP BY path`)
+      .all(p) as Row[]).map((r) => ({ path: String(r.path), lines: n(r.lines), edits: n(r.edits) })),
+  )
+
+  // Messages and cost per session in the range, then summed by the branch the session was on.
+  const branches = (db.prepare(`WITH m AS (
+      SELECT session_id, sum(c) AS messages, sum(cost) AS cost FROM (
+        SELECT session_id, 1 AS c, 0 AS cost FROM prompts WHERE ${inProject} AND ${inRange}
+        UNION ALL SELECT session_id, 1 - is_sidechain, COALESCE(cost, 0) FROM api_calls WHERE ${inProject} AND ${inRange}
+      ) GROUP BY session_id
+    )
+    SELECT COALESCE(NULLIF(s.git_branch, 'HEAD'), NULLIF(d.branch, ''), s.git_branch) AS branch_name,
+      count(*) AS sessions, sum(m.messages) AS messages, sum(m.cost) AS cost, max(s.last_ts) AS last_ts
+    FROM m JOIN sessions s ON s.id = m.session_id LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id
+    GROUP BY branch_name ORDER BY messages DESC, last_ts DESC LIMIT 12`).all(p) as Row[]).map((r) => ({
+    name: (r.branch_name as string | null) ?? null,
+    sessions: n(r.sessions), messages: n(r.messages), cost: n(r.cost), lastTs: n(r.last_ts),
+  }))
+
   return {
     ...all,
     range: rangeInfo,
+    language: inList?.language ?? null,
     rangeSessions: inList?.rangeSessions ?? 0,
     rangeCost: inList?.rangeCost ?? 0,
     rangeMessages: inList?.rangeMessages ?? 0,
@@ -143,5 +185,12 @@ export function projectDetail(db: Db, key: string, rangeKey: RangeKey = 'all'): 
     prs,
     tools,
     models: [...byModel].map(([model, cost]) => ({ model, cost })).sort((a, b) => b.cost - a.cost),
+    series: costSeries(db, range.from, range.to, range.days, key),
+    branches,
+    languages,
+    agents,
+    skills,
+    mcp,
+    subagentCost,
   }
 }

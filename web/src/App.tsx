@@ -1,7 +1,8 @@
-import { Activity, Boxes, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sun } from 'lucide-react'
+import { Activity, Boxes, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { IndexStatus } from '../../shared/types.ts'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { Mark } from './components/Mark.tsx'
 import { cx } from './components/ui.tsx'
 import { getJson, useApi } from './lib/api.ts'
 import { fmtRelative } from './lib/format.ts'
@@ -11,20 +12,26 @@ import { Environment } from './screens/Environment.tsx'
 import { Overview } from './screens/Overview.tsx'
 import { Projects } from './screens/Projects.tsx'
 import { Sessions } from './screens/Sessions.tsx'
+import { Tools } from './screens/Tools.tsx'
+import { Year } from './screens/Year.tsx'
 
 const NAV = [
   { to: '/', label: 'Genel bakış', icon: LayoutGrid, match: (p: string) => p === '/' },
   { to: '/oturumlar', label: 'Oturumlar', icon: Activity, match: (p: string) => p.startsWith('/oturumlar') },
   { to: '/projeler', label: 'Projeler', icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
+  { to: '/araclar', label: 'Araçlar', icon: Wrench, match: (p: string) => p.startsWith('/araclar') },
   { to: '/maliyet', label: 'Maliyet', icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
   { to: '/ortam', label: 'Ortam', icon: Boxes, match: (p: string) => p.startsWith('/ortam') },
+  { to: '/yil-ozeti', label: 'Yıl özeti', icon: Sparkles, match: (p: string) => p.startsWith('/yil-ozeti') },
 ]
 
 const TITLES: [string, string][] = [
   ['/oturumlar', 'Oturumlar'],
   ['/projeler', 'Projeler'],
+  ['/araclar', 'Araçlar'],
   ['/maliyet', 'Maliyet'],
   ['/ortam', 'Ortam'],
+  ['/yil-ozeti', 'Yıl özeti'],
 ]
 
 export function App() {
@@ -45,7 +52,7 @@ export function App() {
           <Mark />
           <span className="hidden font-display text-[17px] font-semibold tracking-[-0.02em] sm:inline">Wiener Tools</span>
         </a>
-        <nav aria-label="Ana menü" className="flex gap-1 md:flex-col">
+        <nav aria-label="Ana menü" className="flex gap-0.5 md:flex-col md:gap-1">
           {NAV.map(({ to, label, icon: Icon, match }) => {
             const active = match(path)
             return (
@@ -55,13 +62,14 @@ export function App() {
                 onClick={(e) => onLinkClick(e, to)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={label}
+                title={label}
                 className={cx(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[14px] transition-colors',
+                  'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[14px] transition-colors md:px-2.5',
                   active ? 'bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--line)]' : 'text-ink-2 hover:text-ink',
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden strokeWidth={1.75} />
-                <span className="hidden sm:inline">{label}</span>
+                <span className="hidden md:inline">{label}</span>
               </a>
             )
           })}
@@ -84,24 +92,16 @@ export function App() {
             <Costs />
           ) : path === '/ortam' ? (
             <Environment />
+          ) : path === '/araclar' ? (
+            <Tools />
+          ) : path === '/yil-ozeti' ? (
+            <Year />
           ) : (
             <NotFound />
           )}
         </ErrorBoundary>
       </main>
     </div>
-  )
-}
-
-/** The Wiener Labs "W", traced from the brand artwork; it takes the text color, so it works in both themes. */
-function Mark() {
-  return (
-    <svg viewBox="0 0 607 424" className="h-[15px] w-auto shrink-0 text-ink" fill="currentColor" aria-hidden>
-      <path
-        fillRule="evenodd"
-        d="M2 0 122 1 122 279 127 291 134 298 148 303 221 302 233 296 233 294 238 290 242 281 243 1 363 1 365 281 370 292 372 292 377 298 386 302 485 304 485 424 364 424 253 312 248 316 243 328 242 424 121 424 117 421 11 315 4 304 1 295 0 2Z M487 0 605 0 607 2 607 177 601 189 545 243 488 243 486 241 486 183 533 182 541 178 546 169 546 122 487 122 485 119Z"
-      />
-    </svg>
   )
 }
 
@@ -170,7 +170,7 @@ function ThemeToggle() {
     }
   }
   return (
-    <div role="radiogroup" aria-label="Tema" className="inline-flex rounded-lg border border-line bg-surface p-0.5">
+    <div role="radiogroup" aria-label="Tema" className="hidden rounded-lg border border-line bg-surface p-0.5 sm:inline-flex">
       {THEMES.map(({ value, label, icon: Icon }) => (
         <button
           key={value}

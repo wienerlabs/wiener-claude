@@ -158,16 +158,25 @@ export class Indexer {
 
   /** Writes a batch of facts in one transaction. */
   apply(facts: Fact[], fileId: number, slug: string): void {
-    const sessions = new Map<string, { first: SessionFact; last: SessionFact; cwdFact: SessionFact | null; entry: string | null }>()
+    const sessions = new Map<
+      string,
+      { first: SessionFact; last: SessionFact; cwdFact: SessionFact | null; branchFact: SessionFact | null; versionFact: SessionFact | null; entry: string | null }
+    >()
     const apis = new Map<string, ApiFact>()
     for (const f of facts) {
       if (f.kind === 'session') {
         const s = sessions.get(f.sessionId)
-        if (!s) sessions.set(f.sessionId, { first: f, last: f, cwdFact: f.cwd ? f : null, entry: f.entrypoint })
-        else {
+        if (!s) {
+          sessions.set(f.sessionId, {
+            first: f, last: f, cwdFact: f.cwd ? f : null, branchFact: f.gitBranch ? f : null, versionFact: f.version ? f : null, entry: f.entrypoint,
+          })
+        } else {
           if (f.ts < s.first.ts) s.first = f
           if (f.ts >= s.last.ts) s.last = f
           if (f.cwd && (!s.cwdFact || f.ts < s.cwdFact.ts)) s.cwdFact = f
+          // Not every record carries the branch and version; the latest one that does wins.
+          if (f.gitBranch && (!s.branchFact || f.ts >= s.branchFact.ts)) s.branchFact = f
+          if (f.version && (!s.versionFact || f.ts >= s.versionFact.ts)) s.versionFact = f
           s.entry ??= f.entrypoint
         }
       } else if (f.kind === 'api') {
@@ -180,10 +189,9 @@ export class Indexer {
       for (const [id, s] of sessions) {
         const cwd = s.cwdFact?.cwd ?? null
         const project = projectOf(cwd, slug)
-        const lastWithBranch = s.last.gitBranch ? s.last : null
         this.st.upsertSession.run({
           $id: id, $slug: slug, $cwd: cwd, $pkey: project.key, $pname: project.name,
-          $branch: lastWithBranch?.gitBranch ?? null, $version: s.last.version, $entry: s.entry,
+          $branch: s.branchFact?.gitBranch ?? null, $version: s.versionFact?.version ?? null, $entry: s.entry,
           $first: s.first.ts, $last: s.last.ts,
         })
       }

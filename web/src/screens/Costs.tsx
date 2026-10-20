@@ -56,7 +56,7 @@ export function Costs() {
           note={deltaText ?? (data.range.key === 'all' ? `${fmtInt(data.range.days)} günlük kayıt` : 'karşılaştırılacak önceki kayıt yok')}
         />
         <Stat label="Ay sonu tahmini" value={fmtUsd(m.projected)} note={`bu ay şu ana kadar ${fmtUsd(m.cost)}`} className="border-l border-line" />
-        <Stat label="Önbellek tasarrufu" value={fmtUsd(data.cacheSavings)} note="önbellek olmasaydı bu kadar fazla tutardı" className="border-t border-line lg:border-t-0 lg:border-l" />
+        <Stat label="Cache tasarrufu" value={fmtUsd(data.cacheSavings)} note="cache olmasaydı bu kadar fazla tutardı" className="border-t border-line lg:border-t-0 lg:border-l" />
         <Stat
           label="Dökümde görünmeyen"
           value={fmtUsd(data.hidden)}
@@ -74,21 +74,21 @@ export function Costs() {
         </div>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Para nereye gidiyor" aside={`${period.lower}, token türüne göre`} />
           <div className="px-5 pb-5">
             <ShareBar
               format={fmtUsd}
               parts={[
-                { label: 'Önbellekten okuma', value: data.mix.cacheRead, color: 'var(--cat-1)', detail: data.tokens ? `${fmtCompact(data.tokens.cacheRead)} token` : undefined },
-                { label: 'Önbelleğe yazma', value: data.mix.cacheWrite, color: 'var(--cat-2)', detail: data.tokens ? `${fmtCompact(data.tokens.cacheWrite)} token` : undefined },
-                { label: 'Çıktı', value: data.mix.output, color: 'var(--cat-3)', detail: data.tokens ? `${fmtCompact(data.tokens.output)} token` : undefined },
-                { label: 'Girdi', value: data.mix.input, color: 'var(--cat-4)', detail: data.tokens ? `${fmtCompact(data.tokens.input)} token` : undefined },
+                { label: "Cache'ten okuma", value: data.mix.cacheRead, color: 'var(--cat-1)', detail: data.tokens ? `${fmtCompact(data.tokens.cacheRead)} token` : undefined },
+                { label: "Cache'e yazma", value: data.mix.cacheWrite, color: 'var(--cat-2)', detail: data.tokens ? `${fmtCompact(data.tokens.cacheWrite)} token` : undefined },
+                { label: 'Output', value: data.mix.output, color: 'var(--cat-3)', detail: data.tokens ? `${fmtCompact(data.tokens.output)} token` : undefined },
+                { label: 'Input', value: data.mix.input, color: 'var(--cat-4)', detail: data.tokens ? `${fmtCompact(data.tokens.input)} token` : undefined },
               ]}
             />
             <p className="mt-4 text-[12px] text-ink-3">
-              Her istekte konuşmanın tamamı yeniden okunur; uzun oturumlarda maliyetin çoğu bu yüzden önbellekten okumadan gelir.
+              Her istekte konuşmanın tamamı cache'ten yeniden okunur; uzun oturumlarda maliyetin çoğu bu yüzden cache okumasından gelir.
             </p>
           </div>
         </Card>
@@ -109,7 +109,7 @@ export function Costs() {
 
       <LimitsCard l={data.limits} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Projeler" aside={`${period.lower}, en çok harcayanlar`} />
           <div className="px-5 pb-5">
@@ -163,7 +163,7 @@ function LimitsCard({ l }: { l: Limits }) {
   return (
     <Card>
       <CardHeader title="Limitler" aside={l.plan ? `Plan: ${l.plan}` : null} />
-      <div className="grid gap-6 px-5 pb-5 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 px-5 pb-5 lg:grid-cols-3">
         <section>
           <h3 className="text-[12px] text-ink-3">Claude Code'un ölçümü</h3>
           {l.measured?.fresh ? (

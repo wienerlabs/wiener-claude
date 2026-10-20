@@ -225,7 +225,7 @@ function suggestions(db: Db, pricing: Pricing, from: string, to: string, periodC
   if (periodCost > 1 && big / periodCost >= 0.25) {
     out.push({
       saving: null,
-      text: `${period.lead} maliyetin ${withPossessive((big / periodCost) * 100, '%')} 200 bin token'ı aşan bağlamla yapılan çağrılardan geldi. Uzun oturumları /compact ile özetlemek ya da yeni bir oturuma geçmek bu payı düşürür.`,
+      text: `${period.lead} maliyetin ${withPossessive((big / periodCost) * 100, '%')} context'i 200 bin token'ı aşan çağrılardan geldi. Uzun oturumları /compact ile özetlemek ya da yeni bir oturuma geçmek bu payı düşürür.`,
     })
   }
 
@@ -235,7 +235,7 @@ function suggestions(db: Db, pricing: Pricing, from: string, to: string, periodC
     const mult = pricing.prices[normalizeModel(r.model)]?.fastMultiplier ?? 1
     premium += r.cost - r.cost / mult
   }
-  if (premium >= 1) out.push({ saving: premium, text: `Hızlı mod ${period.inline} ${money(premium)} fazladan tuttu.` })
+  if (premium >= 1) out.push({ saving: premium, text: `Fast mode ${period.inline} ${money(premium)} fazladan tuttu.` })
   return out
 }
 
@@ -268,12 +268,15 @@ export function budgetCrossing(
 }
 
 /** Cost per day, or per week (keyed by its Monday) when the range is long. */
-function costSeries(db: Db, from: string, to: string, days: number): CostReport['series'] {
+/** Cost per day, or per week past WEEKLY_AFTER_DAYS, split by model; optionally for one project. */
+export function costSeries(db: Db, from: string, to: string, days: number, projectKey: string | null = null): CostReport['series'] {
   const weekly = days > WEEKLY_AFTER_DAYS
   const bucketOf = (day: string) => (weekly ? weekStart(day) : day)
   const points = new Map<string, DailyCost>()
   for (let d = bucketOf(from); d <= to; d = addDays(d, weekly ? 7 : 1)) points.set(d, { day: d, cost: 0, byModel: {} })
-  const rows = db.prepare('SELECT day, model, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day, model').all(from, to) as Row[]
+  const scope = projectKey === null ? '' : ' AND session_id IN (SELECT id FROM sessions WHERE project_key = $key)'
+  const rows = db.prepare(`SELECT day, model, sum(cost) AS cost FROM api_calls WHERE day BETWEEN $from AND $to${scope} GROUP BY day, model`)
+    .all(projectKey === null ? { $from: from, $to: to } : { $from: from, $to: to, $key: projectKey }) as Row[]
   for (const r of rows) {
     const e = points.get(bucketOf(String(r.day)))
     if (!e) continue

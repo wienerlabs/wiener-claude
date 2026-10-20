@@ -10,14 +10,16 @@ Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.c
 
 - **Isı haritaları:** bir yıllık takvim, haftanın günü × saat, proje × gün. Mesaj, token, maliyet, oturum ya da hata üzerinden.
 - **Gün dökümü:** takvimde bir güne tıklayınca o günün oturumları açılır.
-- **Oturumlar:** her oturumun tur tur dökümü (istemler, Claude'un yanıtları, araç çağrıları, hatalar, bağlam özetlemeleri).
-- **Tam metin arama:** bütün istemlerde, yanıtlarda ve kabuk komutlarında arar; Türkçe harfsiz yazılan aramayı da bulur ("degisiklik" → "değişiklik", "kisa" → "kısa"). Bir sonuca tıklayınca döküm o mesajda açılır.
-- **Projeler:** her projenin yıllık etkinliği, en çok değişen dosyaları, açılan PR'ları, kullanılan araçlar ve modeller. Worktree'ler kendi repolarına sayılır.
+- **Oturumlar:** her oturumun tur tur dökümü (prompt'lar, Claude'un yanıtları, araç çağrıları, hatalar, compact'ler).
+- **Tam metin arama:** bütün prompt'larda, yanıtlarda ve shell komutlarında arar; Türkçe harfsiz yazılan aramayı da bulur ("degisiklik" → "değişiklik", "kisa" → "kısa"). Bir sonuca tıklayınca döküm o mesajda açılır.
+- **Projeler:** her projenin yıllık etkinliği, ana dili, zaman içindeki maliyeti, branch'lere ve dillere göre dağılımı, en çok değişen dosyaları, açılan PR'ları, kullanılan araçlar, modeller, subagent'lar, skill'ler ve MCP sunucuları. Worktree'ler kendi repolarına sayılır.
+- **Araçlar:** Claude'un hangi araçları ne sıklıkla kullandığı ve ne kadarının hata döndürdüğü, türlere göre dağılım, MCP sunucuları, skill'ler, subagent'lar ve maliyetteki payları, slash komutları, plan mode ve compact gibi özelliklerin oturumların kaçında kullanıldığı, Claude Code sürümleri.
+- **Yıl özeti:** bir yılın mesajları, aktif günleri, tokenları, en uzun serisi, en çok çalışılan projeleri ve araçları tek kartta. Kart PNG olarak indirilebilir; proje adları ve maliyet gizlenebilir. Resim tarayıcıda oluşturulur, hiçbir yere gönderilmez.
 - **Maliyet ve limitler:** aylık harcama ve ay sonu tahmini, son 30 günün günlük maliyeti, paranın token türlerine ve modellere dağılımı, limitin dolduğu anlar, şu anki 5 saatlik pencere ve tasarruf fırsatları.
 - **Bütçe:** aylık bir tutar belirlersen bu hızla hangi gün aşılacağı Maliyet'te ve Genel bakış'ta görünür.
-- **Ortam:** Claude Code'un hatırladıkları (memory), uyduğu talimatlar (`CLAUDE.md`), yarım kalan görevler ve onaya sunulan planlar, skill'ler, eklentiler, subagent türleri, MCP sunucuları ve ayarlar.
+- **Ortam:** Claude Code'un hatırladıkları (memory), uyduğu talimatlar (`CLAUDE.md`), yarım kalan görevler ve onaya sunulan planlar, skill'ler, plugin'ler, subagent türleri, MCP sunucuları ve ayarlar.
 - **İçgörüler:** "Bu hafta ne oldu" kartı bütçe temposunu, limit olaylarını, değişen satırları, yarım kalan görevleri ve araç hatalarını tek cümlelerle özetler; her biri ilgili ekrana bağlanır.
-- **Dönem özeti:** Genel bakış'ta bu hafta, son 30 gün ve tüm zamanlar yan yana: mesaj sayısı, toplam token ve türlerine göre dağılımı (önbellekten okuma, önbelleğe yazma, çıktı, girdi), tahmini maliyet.
+- **Dönem özeti:** Genel bakış'ta bu hafta, son 30 gün ve tüm zamanlar yan yana: mesaj sayısı, toplam token ve türlerine göre dağılımı (cache'ten okuma, cache'e yazma, output, input), tahmini maliyet.
 - **Dönem filtresi:** Maliyet, Projeler, Oturumlar ve Genel bakış'taki gün × saat ile proje × gün haritaları "Bu hafta", "Son 30 gün" ya da "Tüm zamanlar" için gösterilebilir; seçim adreste durur.
 - **Canlı:** dosyalar değiştikçe panel kendini günceller; açık oturumlar ayrıca listelenir.
 
@@ -60,17 +62,17 @@ npm run typecheck
 | `~/.claude/projects/<proje>/<oturum>/subagents/**` | Subagent dökümleri; maliyetleri ana oturuma yazılır |
 | `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si |
 | `~/.claude/sessions/*.json` | Şu an çalışan Claude Code süreçleri |
-| `~/.claude.json` | Plan adı, son limit ölçümü, skill ve eklenti kullanım sayıları, MCP sunucularının adı ve türü. E-posta, isim ve kimlikler okunmaz. |
+| `~/.claude.json` | Plan adı, son limit ölçümü, skill ve plugin kullanım sayıları, MCP sunucularının adı ve türü. E-posta, isim ve kimlikler okunmaz. |
 | `~/.claude/projects/<proje>/memory/*.md` | Memory dosyaları |
 | `~/.claude/CLAUDE.md`, `<proje>/CLAUDE.md` | Talimatlar |
-| `~/.claude/settings.json`, `~/.claude/plugins/installed_plugins.json` | Ayarlar ve kurulu eklentiler |
+| `~/.claude/settings.json`, `~/.claude/plugins/installed_plugins.json` | Ayarlar ve kurulu plugin'ler |
 
 Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-tools/claude/index.db`, bütçe ayarını `~/.wiener-tools/claude/settings.json` dosyasında tutar. Bu dosya silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar o dökümlerden sonra da kalır.
 
 ## Sayılar nasıl hesaplanıyor
 
 - **Tekrarlar ayıklanır.** Claude Code tek bir API yanıtını içerik bloğu başına ayrı satırlara yazar; bu satırlar her zaman art arda gelmez ve sonrakiler daha büyük token sayısı taşıyabilir. Her yanıt `message.id` ile bir kez, en büyük değeriyle sayılır. Fork'lanan ya da devam ettirilen oturumlara kopyalanan geçmiş de bir kez sayılır.
-- **Maliyet liste fiyatıdır.** Fiyat tablosu `server/pricing.ts` içinde. 1 saatlik önbellek yazmaları girdinin 2 katı, 5 dakikalık olanlar 1,25 katı sayılır. Tablo, Claude Code'un kendi `costUSD` değerleriyle karşılaştırılarak doğrulandı. Tabloyu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok başına dolar):
+- **Maliyet liste fiyatıdır.** Fiyat tablosu `server/pricing.ts` içinde. 1 saatlik cache yazmaları input fiyatının 2 katı, 5 dakikalık olanlar 1,25 katı sayılır. Tablo, Claude Code'un kendi `costUSD` değerleriyle karşılaştırılarak doğrulandı. Tabloyu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok başına dolar):
 
   ```json
   { "claude-opus-5-5": { "input": 4, "output": 20, "cacheRead": 0.2 } }
@@ -78,7 +80,7 @@ Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-
 
 - **Dökümde görünmeyen maliyet.** Claude Code'un kendi sayacı (`cost-state` kayıtları) dökümlere yazılmayan çağrıları da sayar; bu yüzden bazı oturumlarda dökümden hesaplanandan yüksektir. Sayaç yalnızca son süreç çalışmasını tuttuğu için oturum toplamı olarak kullanılamaz; Wiener Tools farkı oturum sayfasında ayrıca gösterir.
 - **Aktif süre**, aralarında 10 dakikadan uzun boşluk olmayan etkinliklerin toplamıdır.
-- **Değişen satırlar** Edit ve Write sonuçlarındaki yamalardan ve Claude Code'un kabuk komutları için tuttuğu farklardan sayılır. Git işlemlerinin (checkout, pull, merge) dokunduğu dosyalar ve Claude Code'un kendi geçici klasörleri sayılmaz.
+- **Değişen satırlar** Edit ve Write sonuçlarındaki yamalardan ve Claude Code'un shell komutları için tuttuğu farklardan sayılır. Git işlemlerinin (checkout, pull, merge) dokunduğu dosyalar ve Claude Code'un kendi geçici klasörleri sayılmaz.
 - **Limitler.** Kullanım limitinin yüzdesi yerelde tutulmaz; Claude Code'un `/usage` ile kaydettiği son ölçüm yalnızca yeniyse gösterilir. Limitin dolduğu anlar dökümlerden okunur. "Şu anki 5 saatlik pencere" yerel isteklerden tahmin edilir; "son 7 gün" karşılaştırması limitin en son dolduğu haftayla yapılır ve kesin bir yüzde değildir.
 
 ## Güvenlik
@@ -92,7 +94,8 @@ Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-
 
 1. **Faz 1:** indeksleyici, Genel bakış, Oturumlar.
 2. **Faz 2:** Maliyet ve limitler, Projeler, tam metin arama.
-3. **Faz 3 (bu sürüm):** Ortam (memory, talimatlar, görevler ve planlar, skill'ler, eklentiler, MCP, ayarlar), bütçe, daha fazla içgörü.
+3. **Faz 3:** Ortam (memory, talimatlar, görevler ve planlar, skill'ler, plugin'ler, MCP, ayarlar), bütçe, daha fazla içgörü.
+4. **Faz 4 (bu sürüm):** Araçlar, proje eğilimleri (branch'ler, diller, maliyet), yıl özeti kartı.
 
 Desktop oturum klasörünün yolu yalnızca macOS'ta doğrulandı; Windows ve Linux yolları Electron varsayılanlarına göre tahmin ediliyor.
 

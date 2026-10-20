@@ -10,7 +10,7 @@ import { Indexer } from './indexer.ts'
 import { dataDir, desktopSessionsDir, liveSessionsDir, projectsDir } from './paths.ts'
 import { Pricing } from './pricing.ts'
 
-const VERSION = '0.4.0'
+const VERSION = '0.5.0'
 const HELP = `Wiener Tools for Claude Code ${VERSION}: Claude Code kullanımını yerelde gösterir.
 
 Kullanım: wiener-tools-claude [seçenekler]

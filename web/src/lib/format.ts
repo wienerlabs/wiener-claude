@@ -118,3 +118,8 @@ export function modelName(model: string): string {
   if (!family) return model
   return `${family[0]?.toUpperCase()}${family.slice(1)} ${ver.join('.')}`.trim()
 }
+
+/** claude.ai connectors reach Claude Code under an id instead of a name. */
+export function mcpServerLabel(name: string): string {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(name) ? `claude.ai connector ${name.slice(0, 8)}` : name
+}

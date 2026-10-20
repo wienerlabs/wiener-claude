@@ -430,10 +430,10 @@ export function insights(db: Db, monthlyBudget: number | null = null): Insight[]
     if (Math.abs(diff) >= 3) {
       add(6, {
         tone: diff > 0 ? 'good' : 'warn',
-        text: `Önbellek isabet oranın ${pct(now)}, geçen haftadan ${Math.abs(diff)} puan ${diff > 0 ? 'yüksek' : 'düşük'}.`,
+        text: `Cache hit oranın ${pct(now)}, geçen haftadan ${Math.abs(diff)} puan ${diff > 0 ? 'yüksek' : 'düşük'}.`,
       })
     } else {
-      add(8, { tone: 'neutral', text: `Önbellek isabet oranın ${pct(now)}, geçen haftayla aynı seviyede.` })
+      add(8, { tone: 'neutral', text: `Cache hit oranın ${pct(now)}, geçen haftayla aynı seviyede.` })
     }
   }
 

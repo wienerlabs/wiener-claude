@@ -112,7 +112,7 @@ export function Overview() {
 
       {summary.data?.periods ? <PeriodTable periods={summary.data.periods} /> : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader title="Bu hafta ne oldu" />
           <ul className="px-5 pb-4">
@@ -224,10 +224,10 @@ function PeriodTable({ periods }: { periods: PeriodTotals[] }) {
   const rows: { label: string; value: (p: PeriodTotals) => number; format: (v: number) => string; strong?: boolean; sub?: boolean }[] = [
     { label: 'Mesaj', value: (p) => p.messages, format: fmtInt },
     { label: 'Toplam token', value: total, format: fmtCompact, strong: true },
-    { label: 'Önbellekten okuma', value: (p) => p.cacheRead, format: fmtCompact, sub: true },
-    { label: 'Önbelleğe yazma', value: (p) => p.cacheWrite, format: fmtCompact, sub: true },
-    { label: 'Çıktı', value: (p) => p.output, format: fmtCompact, sub: true },
-    { label: 'Girdi', value: (p) => p.input, format: fmtCompact, sub: true },
+    { label: "Cache'ten okuma", value: (p) => p.cacheRead, format: fmtCompact, sub: true },
+    { label: "Cache'e yazma", value: (p) => p.cacheWrite, format: fmtCompact, sub: true },
+    { label: 'Output', value: (p) => p.output, format: fmtCompact, sub: true },
+    { label: 'Input', value: (p) => p.input, format: fmtCompact, sub: true },
     { label: 'Tahmini maliyet', value: (p) => p.cost, format: fmtUsd },
   ]
   return (
@@ -267,7 +267,7 @@ function PeriodTable({ periods }: { periods: PeriodTotals[] }) {
         </table>
       </div>
       <p className="px-4 pb-4 text-[12px] text-ink-3 sm:px-5">
-        Toplam, Claude'un her istekte konuşmayı önbellekten yeniden okumasını da sayar; bu yüzden çok büyüktür. Claude'un yazdığı metin "Çıktı" satırıdır. Tam sayı için üzerine gel.
+        Toplam, Claude'un her istekte konuşmayı cache'ten yeniden okumasını da sayar; bu yüzden çok büyüktür. Claude'un yazdığı metin "Output" satırıdır. Tam sayı için üzerine gel.
       </p>
     </Card>
   )

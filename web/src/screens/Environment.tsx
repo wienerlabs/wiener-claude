@@ -15,7 +15,7 @@ const SECTIONS: { value: Section; label: string; count: (r: EnvReport) => number
   { value: 'memory', label: 'Memory', count: (r) => r.memory.filter((m) => m.type !== 'index').length },
   { value: 'talimatlar', label: 'Talimatlar', count: (r) => r.instructions.length },
   { value: 'gorevler', label: 'Görevler', count: (r) => r.tasks.reduce((s, g) => s + g.tasks.filter((t) => t.status !== 'completed').length, 0) },
-  { value: 'skill', label: 'Skill ve eklentiler', count: (r) => r.skills.length },
+  { value: 'skill', label: "Skill ve plugin'ler", count: (r) => r.skills.length },
   { value: 'mcp', label: 'MCP', count: (r) => r.mcp.length },
   { value: 'ayarlar', label: 'Ayarlar', count: () => null },
 ]
@@ -278,7 +278,7 @@ function TasksSection({ r }: { r: EnvReport }) {
       <Card>
         <CardHeader title="Planlar" aside={r.plans.length ? `${r.plans.length} plan` : null} />
         {r.plans.length === 0 ? (
-          <p className="px-5 pb-5 text-ink-2">Plan modunda onaya sunulmuş bir plan yok.</p>
+          <p className="px-5 pb-5 text-ink-2">Plan mode'da onaya sunulmuş bir plan yok.</p>
         ) : (
           <ul className="px-5 pb-4">{r.plans.map((p) => <PlanRow key={p.key} p={p} />)}</ul>
         )}
@@ -324,7 +324,7 @@ function PlanRow({ p }: { p: PlanItem }) {
 
 function SkillsSection({ r }: { r: EnvReport }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <Card>
         <CardHeader title="Skill'ler" aside="kullanıma göre" />
         {r.skills.length === 0 ? (
@@ -365,9 +365,9 @@ function SkillsSection({ r }: { r: EnvReport }) {
       </Card>
       <div className="space-y-6">
         <Card>
-          <CardHeader title="Eklentiler" />
+          <CardHeader title="Plugin'ler" />
           {r.plugins.length === 0 ? (
-            <p className="px-5 pb-5 text-ink-2">Kurulu eklenti yok.</p>
+            <p className="px-5 pb-5 text-ink-2">Kurulu plugin yok.</p>
           ) : (
             <ul className="px-5 pb-4">
               {r.plugins.map((p) => (
@@ -460,7 +460,7 @@ function SettingsSection({ r }: { r: EnvReport }) {
   if (!s.file) return <Empty title="Ayar dosyası yok" body="~/.claude/settings.json bulunamadı; Claude Code varsayılan ayarlarla çalışıyor." />
   const rules: [string, string[]][] = [['İzin verilen', s.allow], ['Sorulacak', s.ask], ['Yasak', s.deny]]
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader title="Genel" aside={<span className="font-mono">{s.file}</span>} />
         <dl className="px-5 pb-4">

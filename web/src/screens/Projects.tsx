@@ -1,11 +1,11 @@
-import { ArrowLeft, ArrowRight, FileCode2, GitPullRequest } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FileCode2, GitBranch, GitPullRequest } from 'lucide-react'
 import { useState } from 'react'
 import type { HeatmapResponse, Metric, ProjectDetail, ProjectSummary, RangeKey } from '../../../shared/types.ts'
-import { HBars, MiniStrip } from '../components/charts.tsx'
+import { DailyBars, HBars, MiniStrip, ShareBar } from '../components/charts.tsx'
 import { Calendar } from '../components/heatmap/Calendar.tsx'
 import { Card, CardHeader, ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
-import { METRIC_LABEL, fmtDateTime, fmtInt, fmtRelative, fmtUsd, modelName } from '../lib/format.ts'
+import { METRIC_LABEL, fmtDateTime, fmtInt, fmtRelative, fmtUsd, mcpServerLabel, modelName } from '../lib/format.ts'
 import { RangePicker, useRange } from '../lib/range.tsx'
 import { onLinkClick } from '../lib/router.ts'
 
@@ -43,7 +43,10 @@ function ProjectList() {
                 className="grid gap-x-6 gap-y-2 px-5 py-4 transition-colors hover:bg-raised sm:grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.3fr)_auto_minmax(0,1fr)]"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-[15px] font-medium">{p.name}</span>
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate text-[15px] font-medium">{p.name}</span>
+                    {p.language ? <span className="shrink-0 rounded-full border border-line px-1.5 text-[11px] text-ink-2">{p.language}</span> : null}
+                  </span>
                   <span className="block truncate font-mono text-[12px] text-ink-3">{p.path ? p.path.replace(/^\/Users\/[^/]+/, '~') : 'farklı klasörler'}</span>
                   <span className="mt-1 block text-[12px] text-ink-2 num">
                     {RANGE_LOWER[range]} {fmtInt(range === 'all' ? p.sessions : p.rangeSessions)} oturum, {fmtInt(p.rangeMessages)} mesaj, {fmtUsd(p.rangeCost)} · son etkinlik {fmtRelative(p.lastTs)}
@@ -108,7 +111,7 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
               value={fmtInt(range === 'all' ? data.sessions : data.rangeSessions)}
               note={range === 'all' ? `${fmtDateTime(data.firstTs)} başladı` : `toplam ${fmtInt(data.sessions)}`}
             />
-            <Stat label="Mesaj" value={fmtInt(data.messages)} note={`${fmtInt(data.prompts)} istem`} />
+            <Stat label="Mesaj" value={fmtInt(data.messages)} note={`${fmtInt(data.prompts)} prompt`} />
             <Stat label="Maliyet" value={fmtUsd(data.rangeCost)} note={range === 'all' ? 'tahmini liste fiyatı' : `toplam ${fmtUsd(data.cost)}`} />
             <Stat
               label="Değişen satır"
@@ -128,9 +131,19 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
             </div>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Card>
-              <CardHeader title="En çok değişen dosyalar" aside={`${RANGE_LOWER[range]}, Edit, Write ve kabuk düzenlemeleri`} />
+              <CardHeader title={data.series.bucket === 'week' ? 'Haftalık maliyet' : 'Günlük maliyet'} aside={RANGE_LOWER[range]} />
+              <div className="px-5 pb-4">
+                <DailyBars data={data.series.points} bucket={data.series.bucket} height={170} />
+              </div>
+            </Card>
+            <LanguageCard languages={data.languages} range={range} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+            <Card>
+              <CardHeader title="En çok değişen dosyalar" aside={`${RANGE_LOWER[range]}, Edit, Write ve shell düzenlemeleri`} />
               {data.files.length === 0 ? (
                 <p className="px-5 pb-5 text-ink-2">Bu dönemde kayıtlı dosya değişikliği yok.</p>
               ) : (
@@ -192,8 +205,11 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
                   <HBars format={fmtUsd} items={data.models.map((m) => ({ label: modelName(m.model), value: m.cost }))} />
                 </div>
               </Card>
+              <HelperCard data={data} range={range} />
             </div>
           </div>
+
+          <BranchCard branches={data.branches} range={range} />
 
           <Card>
             <CardHeader title="Açılan PR'lar" aside={data.prs.length ? `${data.prs.length} PR` : null} />
@@ -255,5 +271,117 @@ function FilePath({ path }: { path: string }) {
       <span className="min-w-0 truncate text-ink-3">{dir}</span>
       <span className="-ml-1.5 shrink-0 text-ink">{base}</span>
     </span>
+  )
+}
+
+const LANGUAGE_COLORS = ['var(--cat-1)', 'var(--cat-3)', 'var(--cat-2)', 'var(--cat-4)', 'var(--heat-4)']
+
+/** Changed lines by language; the five largest by name, the rest together. */
+function LanguageCard({ languages, range }: { languages: ProjectDetail['languages']; range: RangeKey }) {
+  const named = languages.filter((l) => l.name !== 'Diğer').slice(0, 5)
+  const rest = languages.filter((l) => !named.includes(l))
+  const parts = [
+    ...named.map((l, i) => ({ label: l.name, value: l.lines, color: LANGUAGE_COLORS[i] ?? 'var(--ink-3)', detail: `${fmtInt(l.files)} dosya` })),
+    ...(rest.length
+      ? [{
+          label: 'Diğer',
+          value: rest.reduce((s, l) => s + l.lines, 0),
+          color: 'var(--line-strong)',
+          detail: `${fmtInt(rest.reduce((s, l) => s + l.files, 0))} dosya`,
+        }]
+      : []),
+  ]
+  return (
+    <Card>
+      <CardHeader title="Diller" aside={`${RANGE_LOWER[range]}, değişen satıra göre`} />
+      <div className="px-5 pb-5">
+        {parts.some((p) => p.value > 0) ? (
+          <ShareBar parts={parts} format={fmtInt} />
+        ) : (
+          <p className="text-ink-2">Bu dönemde kayıtlı dosya değişikliği yok.</p>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+/** Subagents, skills and MCP servers this project leaned on. */
+function HelperCard({ data, range }: { data: ProjectDetail; range: RangeKey }) {
+  const groups: { title: string; items: { name: string; calls: number }[] }[] = [
+    { title: "Subagent'lar", items: data.agents },
+    { title: "Skill'ler", items: data.skills },
+    { title: 'MCP sunucuları', items: data.mcp.map((m) => ({ ...m, name: mcpServerLabel(m.name) })) },
+  ].filter((g) => g.items.length > 0)
+  if (groups.length === 0) return null
+  return (
+    <Card>
+      <CardHeader title="Subagent, skill ve MCP" aside={data.subagentCost > 0 ? `subagent'lar ${fmtUsd(data.subagentCost)}` : RANGE_LOWER[range]} />
+      <div className="space-y-3 px-5 pb-4">
+        {groups.map((g) => (
+          <div key={g.title}>
+            <h3 className="text-[12px] text-ink-3">{g.title}</h3>
+            <ul>
+              {g.items.map((it) => (
+                <li key={it.name} className="flex items-baseline gap-3 py-0.5 text-[13px]">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[12px]" title={it.name}>{it.name}</span>
+                  <span className="font-mono text-[12px] text-ink-2 num">{fmtInt(it.calls)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function BranchCard({ branches, range }: { branches: ProjectDetail['branches']; range: RangeKey }) {
+  if (branches.length === 0) return null
+  return (
+    <Card>
+      <CardHeader title="Branch'ler" aside={`${RANGE_LOWER[range]}, oturumun çalıştığı branch`} />
+      <div className="overflow-x-auto px-5 pb-4">
+        <table className="w-full min-w-[520px] table-fixed text-[13px]">
+          <colgroup>
+            <col />
+            <col className="w-[5rem]" />
+            <col className="w-[6rem]" />
+            <col className="w-[6rem]" />
+            <col className="w-[7.5rem]" />
+          </colgroup>
+          <thead>
+            <tr className="text-left text-[12px] text-ink-3">
+              <th className="pb-2 font-normal">Branch</th>
+              <th className="pb-2 text-right font-normal">Oturum</th>
+              <th className="pb-2 text-right font-normal">Mesaj</th>
+              <th className="pb-2 text-right font-normal">Maliyet</th>
+              <th className="pb-2 text-right font-normal">Son</th>
+            </tr>
+          </thead>
+          <tbody>
+            {branches.map((b) => (
+              <tr key={b.name ?? '—'} className="border-t border-line">
+                <td className="py-1.5 pr-3">
+                  <span className="flex min-w-0 items-center gap-1.5 font-mono text-[12px]" title={b.name ?? undefined}>
+                    <GitBranch className="size-3.5 shrink-0 text-ink-3" aria-hidden />
+                    {b.name === null ? (
+                      <span className="text-ink-3">git repo'su değil</span>
+                    ) : b.name === 'HEAD' ? (
+                      <span className="text-ink-3">detached HEAD</span>
+                    ) : (
+                      <span className="truncate">{b.name}</span>
+                    )}
+                  </span>
+                </td>
+                <td className="py-1.5 text-right font-mono text-[12px] num">{fmtInt(b.sessions)}</td>
+                <td className="py-1.5 text-right font-mono text-[12px] num">{fmtInt(b.messages)}</td>
+                <td className="py-1.5 text-right font-mono text-[12px] num">{fmtUsd(b.cost)}</td>
+                <td className="py-1.5 pl-3 text-right text-[12px] whitespace-nowrap text-ink-3">{fmtRelative(b.lastTs)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   )
 }

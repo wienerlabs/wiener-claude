@@ -294,6 +294,8 @@ export interface ProjectSummary {
   strip: number[]
   /** Most edited files in the range. */
   topFiles: string[]
+  /** The language with the most changed lines in the range, docs and config aside. */
+  language: string | null
 }
 
 export interface ProjectFile {
@@ -318,6 +320,106 @@ export interface ProjectDetail extends ProjectSummary {
   prs: { url: string; number: number | null; repo: string | null; ts: number; sessionId: string; title: string }[]
   tools: { name: string; calls: number; errors: number }[]
   models: { model: string; cost: number }[]
+  /** Cost by day, or by week for long ranges. */
+  series: { bucket: 'day' | 'week'; points: DailyCost[] }
+  /** Branch each session was last on; desktop worktrees name theirs when git reports a detached HEAD. */
+  branches: { name: string | null; sessions: number; messages: number; cost: number; lastTs: number }[]
+  languages: LanguageShare[]
+  agents: { name: string; calls: number }[]
+  skills: { name: string; calls: number }[]
+  mcp: { name: string; calls: number }[]
+  /** What subagents cost in this project in the range. */
+  subagentCost: number
+}
+
+export interface LanguageShare {
+  name: string
+  /** Lines added plus removed. */
+  lines: number
+  edits: number
+  files: number
+}
+
+export type ToolCategory = 'shell' | 'files' | 'web' | 'agents' | 'planning' | 'skills' | 'mcp' | 'other'
+
+export interface ToolStat {
+  name: string
+  category: ToolCategory
+  calls: number
+  /** Failed calls; a call the person refused counts as denied instead. */
+  errors: number
+  denied: number
+  sessions: number
+}
+
+export interface UsageStat {
+  name: string
+  calls: number
+  sessions: number
+  lastTs: number
+}
+
+export interface McpServerStat extends UsageStat {
+  errors: number
+  tools: { name: string; calls: number }[]
+}
+
+export type FeatureKey = 'subagents' | 'skills' | 'mcp' | 'plan' | 'tasks' | 'web' | 'questions' | 'commands' | 'shell' | 'compact' | 'interrupt' | 'fast'
+
+export interface ToolsReport {
+  range: RangeInfo
+  /** Sessions with a message in the range: the base for feature adoption. */
+  sessions: number
+  totals: { calls: number; errors: number; denied: number; apiErrors: number; apiRetries: number }
+  categories: { key: ToolCategory; calls: number }[]
+  tools: ToolStat[]
+  mcp: McpServerStat[]
+  skills: UsageStat[]
+  agents: UsageStat[]
+  /** What subagents cost, and their share of all spend in the range. */
+  subagents: { cost: number; share: number }
+  commands: UsageStat[]
+  features: { key: FeatureKey; sessions: number; uses: number }[]
+  versions: { version: string; sessions: number; firstTs: number; lastTs: number }[]
+}
+
+export interface YearReport {
+  year: number
+  /** Years with any recorded activity, newest first. */
+  years: number[]
+  from: string
+  /** Today while the year is still running. */
+  to: string
+  partial: boolean
+  firstDay: string | null
+  days: { day: string; messages: number }[]
+  totals: {
+    sessions: number
+    messages: number
+    prompts: number
+    tokens: number
+    outputTokens: number
+    cost: number
+    linesAdded: number
+    linesRemoved: number
+    files: number
+    prs: number
+    toolCalls: number
+  }
+  activeDays: number
+  longestStreak: { days: number; from: string; to: string } | null
+  busiestDay: { day: string; messages: number } | null
+  months: number[]
+  /** Hour of the day (0–23) and weekday (0 = Monday) with the most messages. */
+  peakHour: number | null
+  peakWeekday: number | null
+  projects: { name: string; messages: number; cost: number }[]
+  tools: { name: string; calls: number }[]
+  model: { name: string; share: number } | null
+  skill: { name: string; calls: number } | null
+  command: { name: string; uses: number } | null
+  agent: { name: string; calls: number } | null
+  longestSession: { id: string; title: string; messages: number } | null
 }
 
 export interface Settings {
@@ -396,7 +498,7 @@ export interface PluginItem {
 
 export interface McpServer {
   name: string
-  /** Where it is configured: "Kullanıcı", "Proje: …", "claude.ai bağlayıcısı", "Desktop uygulaması", or "Yapılandırma bulunamadı". */
+  /** Where it is configured: "Kullanıcı", "Proje: …", "claude.ai connector", "Desktop uygulaması", or "Yapılandırma bulunamadı". */
   scope: string
   transport: 'stdio' | 'http' | 'sse' | null
   /** Program name for stdio servers, host for remote ones. Never arguments, headers or env. */
