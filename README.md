@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/wienerlabs/wiener-claude/main/web/public/favicon.svg" width="52" height="52" alt="" />
 
-# Wiener Tools for Claude Code
+# Wiener Statistics for Claude Code
 
 Claude Code kullanımın için yerel bir panel: ısı haritaları, oturum dökümleri,<br />
 maliyet ve limitler, araç kullanımı ve kanıta dayalı ipuçları.
