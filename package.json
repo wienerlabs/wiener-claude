@@ -1,0 +1,49 @@
+{
+  "name": "wiener-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code kullanımını yerelde gösteren sade bir panel: ısı haritaları, oturumlar, maliyet.",
+  "type": "module",
+  "bin": {
+    "wiener-tools": "bin/wiener.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"node --watch-path=server --watch-path=shared server/main.ts --no-open\" \"vite\"",
+    "build": "vite build && esbuild server/main.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/server/main.js",
+    "start": "node bin/wiener.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.60.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,213 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Tokens. Light: cool off-white paper and blue-black ink. Dark: charcoal, not black.
+ * The heat ramp is one hue (blue), light to dark; dark mode flips it so "more" is brighter.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --raised: #fafbfc;
+  --ink: #15171c;
+  --ink-2: #565b66;
+  --ink-3: #868c97;
+  --line: #e3e5ea;
+  --line-strong: #cfd3da;
+  --accent: #1c5cab;
+  --accent-soft: #e6effb;
+  --danger: #c23a3a;
+  --danger-soft: #fbeceb;
+  --good: #1f8a4c;
+  --heat-0: #eceef2;
+  --heat-1: #b7d3f6;
+  --heat-2: #6da7ec;
+  --heat-3: #2a78d6;
+  --heat-4: #184f95;
+  --focus: #2a78d6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --bg: #111316;
+    --surface: #181b20;
+    --raised: #1d2026;
+    --ink: #eceef2;
+    --ink-2: #a7adb8;
+    --ink-3: #757b86;
+    --line: #262a31;
+    --line-strong: #353a43;
+    --accent: #6da7ec;
+    --accent-soft: #19283b;
+    --danger: #f08a84;
+    --danger-soft: #3a1f1f;
+    --good: #5fc68a;
+    --heat-0: #1f232a;
+    --heat-1: #104281;
+    --heat-2: #256abf;
+    --heat-3: #5598e7;
+    --heat-4: #9ec5f4;
+    --focus: #6da7ec;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111316;
+  --surface: #181b20;
+  --raised: #1d2026;
+  --ink: #eceef2;
+  --ink-2: #a7adb8;
+  --ink-3: #757b86;
+  --line: #262a31;
+  --line-strong: #353a43;
+  --accent: #6da7ec;
+  --accent-soft: #19283b;
+  --danger: #f08a84;
+  --danger-soft: #3a1f1f;
+  --good: #5fc68a;
+  --heat-0: #1f232a;
+  --heat-1: #104281;
+  --heat-2: #256abf;
+  --heat-3: #5598e7;
+  --heat-4: #9ec5f4;
+  --focus: #6da7ec;
+}
+
+@theme inline {
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-good: var(--good);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss02';
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.heat-cell {
+  border-radius: 3px;
+  transition: outline-color 120ms;
+  outline: 1.5px solid transparent;
+  outline-offset: 1px;
+}
+.heat-cell:hover,
+.heat-cell[aria-pressed='true'] {
+  outline-color: var(--ink);
+}
+
+/* Markdown written by Claude in the replay. */
+.md {
+  overflow-wrap: anywhere;
+}
+.md > * + * {
+  margin-top: 0.6em;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 600;
+  margin-top: 1em;
+}
+.md ul,
+.md ol {
+  padding-left: 1.3em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li + li {
+  margin-top: 0.2em;
+}
+.md a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.3em;
+}
+.md pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+.md pre code {
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: left;
+}
+.md blockquote {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 10px;
+  color: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

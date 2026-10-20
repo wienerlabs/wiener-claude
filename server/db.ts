@@ -1,0 +1,174 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+
+// The index is a cache of ~/.claude. Bump this when the schema or the way records are read
+// changes; the old index is then dropped and rebuilt from the transcripts.
+const INDEX_VERSION = 2
+
+const SCHEMA = `
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+CREATE TABLE files (
+  id INTEGER PRIMARY KEY,
+  path TEXT NOT NULL UNIQUE,
+  session_id TEXT NOT NULL,
+  is_subagent INTEGER NOT NULL,
+  size INTEGER NOT NULL DEFAULT 0,
+  mtime_ms REAL NOT NULL DEFAULT 0,
+  ino INTEGER NOT NULL DEFAULT 0,
+  offset INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  slug TEXT,
+  cwd TEXT,
+  project_key TEXT,
+  project_name TEXT,
+  git_branch TEXT,
+  version TEXT,
+  entrypoint TEXT,
+  first_ts INTEGER,
+  last_ts INTEGER,
+  custom_title TEXT,
+  ai_title TEXT,
+  first_prompt TEXT,
+  first_prompt_ts INTEGER
+);
+CREATE INDEX sessions_last ON sessions(last_ts);
+
+CREATE TABLE api_calls (
+  msg_id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  file_id INTEGER NOT NULL,
+  ts INTEGER NOT NULL, day TEXT NOT NULL, hour INTEGER NOT NULL, dow INTEGER NOT NULL,
+  model TEXT NOT NULL,
+  input INTEGER NOT NULL, output INTEGER NOT NULL, cache_read INTEGER NOT NULL,
+  cache_write_5m INTEGER NOT NULL, cache_write_1h INTEGER NOT NULL, web_search INTEGER NOT NULL,
+  fast INTEGER NOT NULL, is_sidechain INTEGER NOT NULL,
+  cost REAL
+);
+CREATE INDEX api_day ON api_calls(day);
+CREATE INDEX api_session ON api_calls(session_id);
+
+CREATE TABLE prompts (
+  uuid TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  file_id INTEGER NOT NULL,
+  ts INTEGER NOT NULL, day TEXT NOT NULL, hour INTEGER NOT NULL, dow INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  preview TEXT NOT NULL
+);
+CREATE INDEX prompts_day ON prompts(day);
+CREATE INDEX prompts_session ON prompts(session_id);
+
+CREATE TABLE tool_uses (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  file_id INTEGER NOT NULL,
+  ts INTEGER NOT NULL, day TEXT NOT NULL, hour INTEGER NOT NULL, dow INTEGER NOT NULL,
+  name TEXT,
+  mcp_server TEXT,
+  is_sidechain INTEGER NOT NULL DEFAULT 0,
+  is_error INTEGER,
+  denied TEXT
+);
+CREATE INDEX tools_day ON tool_uses(day);
+CREATE INDEX tools_session ON tool_uses(session_id);
+
+CREATE TABLE events (
+  uuid TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  file_id INTEGER NOT NULL,
+  ts INTEGER NOT NULL, day TEXT NOT NULL, hour INTEGER NOT NULL, dow INTEGER NOT NULL,
+  kind TEXT NOT NULL
+);
+CREATE INDEX events_day ON events(day);
+CREATE INDEX events_session ON events(session_id);
+
+CREATE TABLE cost_states (
+  session_id TEXT NOT NULL,
+  start_time INTEGER NOT NULL,
+  total_cost REAL NOT NULL,
+  lines_added INTEGER NOT NULL,
+  lines_removed INTEGER NOT NULL,
+  api_ms INTEGER NOT NULL,
+  tool_ms INTEGER NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  PRIMARY KEY (session_id, start_time)
+);
+
+CREATE TABLE prs (
+  url TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  number INTEGER,
+  repo TEXT,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX prs_session ON prs(session_id);
+
+CREATE TABLE desktop_sessions (
+  cli_session_id TEXT PRIMARY KEY,
+  desktop_id TEXT,
+  title TEXT,
+  branch TEXT,
+  worktree_name TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER,
+  last_activity_at INTEGER,
+  model TEXT,
+  cwd TEXT
+);
+`
+
+export type Db = DatabaseSync
+
+export function openDb(file: string): Db {
+  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true })
+  let db = new DatabaseSync(file)
+  if (readVersion(db) !== INDEX_VERSION) {
+    db.close()
+    if (file !== ':memory:') for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true })
+    db = new DatabaseSync(file)
+    db.exec(SCHEMA)
+    db.exec(`PRAGMA user_version = ${INDEX_VERSION}`)
+  }
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY;')
+  return db
+}
+
+function readVersion(db: Db): number {
+  const row = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined
+  return row?.user_version ?? 0
+}
+
+export function getMeta(db: Db, key: string): string | null {
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined
+  return row?.value ?? null
+}
+
+export function setMeta(db: Db, key: string, value: string): void {
+  db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+}
+
+export function transaction<T>(db: Db, fn: () => T): T {
+  db.exec('BEGIN')
+  try {
+    const result = fn()
+    db.exec('COMMIT')
+    return result
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
+/** Removes everything derived from ~/.claude, keeping settings in meta. */
+export function clearIndex(db: Db): void {
+  transaction(db, () => {
+    for (const t of ['files', 'sessions', 'api_calls', 'prompts', 'tool_uses', 'events', 'cost_states', 'prs', 'desktop_sessions']) {
+      db.exec(`DELETE FROM ${t}`)
+    }
+  })
+}
