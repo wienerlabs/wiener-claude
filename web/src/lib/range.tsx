@@ -24,6 +24,13 @@ export function useRange(fallback: RangeKey): [RangeKey, (key: RangeKey) => void
   return [key, set]
 }
 
+/** A link that opens on the same range; ?donem= is left out when it is the target page's default. */
+export function rangeHref(path: string, key: RangeKey, fallback: RangeKey = '30d'): string {
+  if (key === fallback) return path
+  const slug = RANGES.find((r) => r.value === key)?.slug ?? ''
+  return `${path}${path.includes('?') ? '&' : '?'}donem=${slug}`
+}
+
 export function RangePicker({ value, onChange }: { value: RangeKey; onChange: (key: RangeKey) => void }) {
   return <Segmented label="Dönem" value={value} onChange={onChange} options={RANGES.map((r) => ({ value: r.value, label: r.label }))} />
 }

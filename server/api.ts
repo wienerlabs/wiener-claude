@@ -15,6 +15,7 @@ import { projectDetail, projectList } from './projects.ts'
 import { parseRange, rangeBounds } from './range.ts'
 import * as q from './queries.ts'
 import { turnsOf } from './replay.ts'
+import { tipsReport } from './tips.ts'
 import { toolsReport } from './tools.ts'
 import { yearReport } from './year.ts'
 import { SettingsError, readSettings, updateSettings } from './settings.ts'
@@ -130,6 +131,8 @@ export function createApp(ctx: AppContext): Hono {
     const detail = projectDetail(db, c.req.param('key'), parseRange(c.req.query('range'), 'all'))
     return detail ? c.json(detail) : c.json({ error: 'Proje bulunamadı' }, 404)
   })
+
+  app.get('/api/tips', (c) => c.json(tipsReport(db, ctx.pricing, parseRange(c.req.query('range'), '30d'))))
 
   app.get('/api/tools', (c) => c.json(toolsReport(db, parseRange(c.req.query('range'), '30d'))))
 

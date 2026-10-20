@@ -408,6 +408,12 @@ export function settingsView(settings: Json | null, file: string | null): Settin
   return view
 }
 
+/** Configured and used MCP servers, without the rest of the environment. */
+export function mcpServerList(db: Db): McpServer[] {
+  const claudeJson = readClaudeJson()
+  return mcpServers(db, claudeJson, projectRoots(db, claudeJson))
+}
+
 export function envReport(db: Db): EnvReport {
   const claudeJson = readClaudeJson()
   const settingsFile = path.join(claudeDir(), 'settings.json')

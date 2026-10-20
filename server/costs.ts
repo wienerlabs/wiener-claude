@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { CostMix, CostReport, DailyCost, LimitHit, Limits, ModelCost, RangeKey, Suggestion } from '../shared/types.ts'
+import type { CostMix, CostReport, DailyCost, LimitHit, Limits, ModelCost, RangeKey } from '../shared/types.ts'
 import { withPossessive } from '../shared/tr.ts'
 import type { Db } from './db.ts'
 import { type Pricing, normalizeModel } from './pricing.ts'
@@ -12,14 +12,13 @@ type Row = Record<string, unknown>
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const usd = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 const usd2 = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-const money = (v: number) => (Math.abs(v) >= 100 ? usd.format(v) : usd2.format(v))
+export const money = (v: number) => (Math.abs(v) >= 100 ? usd.format(v) : usd2.format(v))
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
 const BLOCK = 5 * HOUR
 /** A Claude Code utilization reading older than this no longer describes the current window. */
 const MEASURE_FRESH_MS = 6 * HOUR
-const BIG_CONTEXT = 200_000
 
 // ---- account file -----------------------------------------------------------------------------
 
@@ -185,58 +184,10 @@ function mixOf(rows: UsageSums[], pricing: Pricing): CostMix {
   return mix
 }
 
-function priceAs(rows: UsageSums[], pricing: Pricing, model: string): number {
-  return rows.reduce(
-    (s, r) =>
-      s +
-      (pricing.cost(model, {
-        input: r.input, output: r.output, cacheRead: r.cache_read, cacheWrite5m: r.cache_write_5m,
-        cacheWrite1h: r.cache_write_1h, webSearch: 0, fast: false,
-      }) ?? 0),
-    0,
-  )
-}
-
-const PREMIUM = /^claude-(opus|fable|mythos)/
-const CHEAPER_MODEL = 'claude-sonnet-5-5'
-
-const PERIOD: Record<RangeKey, { lead: string; inline: string }> = {
+export const PERIOD: Record<RangeKey, { lead: string; inline: string }> = {
   week: { lead: 'Bu hafta', inline: 'bu hafta' },
   '30d': { lead: 'Son 30 günde', inline: 'son 30 günde' },
   all: { lead: 'Şimdiye kadar', inline: 'şimdiye kadar' },
-}
-
-function suggestions(db: Db, pricing: Pricing, from: string, to: string, periodCost: number, key: RangeKey): Suggestion[] {
-  const period = PERIOD[key]
-  const out: Suggestion[] = []
-
-  const side = sums(db, 'is_sidechain = 1 AND day BETWEEN ? AND ?', from, to).filter((r) => PREMIUM.test(normalizeModel(r.model)))
-  const sideCost = side.reduce((s, r) => s + r.cost, 0)
-  const sideAlt = priceAs(side, pricing, CHEAPER_MODEL)
-  if (sideCost - sideAlt >= 5) {
-    out.push({
-      saving: sideCost - sideAlt,
-      text: `Subagent çağrıları ${period.inline} ${money(sideCost)} tuttu. Arama ve keşif gibi işlerde Sonnet 5.5 kullansalardı yaklaşık ${money(sideAlt)} olurdu.`,
-    })
-  }
-
-  const big = n((db.prepare(`SELECT COALESCE(sum(cost), 0) AS c FROM api_calls
-      WHERE day BETWEEN ? AND ? AND input + cache_read + cache_write_5m + cache_write_1h > ?`).get(from, to, BIG_CONTEXT) as Row).c)
-  if (periodCost > 1 && big / periodCost >= 0.25) {
-    out.push({
-      saving: null,
-      text: `${period.lead} maliyetin ${withPossessive((big / periodCost) * 100, '%')} context'i 200 bin token'ı aşan çağrılardan geldi. Uzun oturumları /compact ile özetlemek ya da yeni bir oturuma geçmek bu payı düşürür.`,
-    })
-  }
-
-  const fast = sums(db, 'fast = 1 AND day BETWEEN ? AND ?', from, to)
-  let premium = 0
-  for (const r of fast) {
-    const mult = pricing.prices[normalizeModel(r.model)]?.fastMultiplier ?? 1
-    premium += r.cost - r.cost / mult
-  }
-  if (premium >= 1) out.push({ saving: premium, text: `Fast mode ${period.inline} ${money(premium)} fazladan tuttu.` })
-  return out
 }
 
 /**
@@ -267,8 +218,7 @@ export function budgetCrossing(
   return addDays(monthFirst, Math.floor(days))
 }
 
-/** Cost per day, or per week (keyed by its Monday) when the range is long. */
-/** Cost per day, or per week past WEEKLY_AFTER_DAYS, split by model; optionally for one project. */
+/** Cost per day, or per week (keyed by its Monday) past WEEKLY_AFTER_DAYS, split by model; optionally for one project. */
 export function costSeries(db: Db, from: string, to: string, days: number, projectKey: string | null = null): CostReport['series'] {
   const weekly = days > WEEKLY_AFTER_DAYS
   const bucketOf = (day: string) => (weekly ? weekStart(day) : day)
@@ -357,7 +307,6 @@ export function costReport(
       { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     ),
     projects,
-    suggestions: suggestions(db, pricing, range.from, range.to, total, range.key),
     month: {
       from: mb.first, to: t, cost: monthCost,
       projected: (monthCost / elapsedDays) * mb.daysInMonth,

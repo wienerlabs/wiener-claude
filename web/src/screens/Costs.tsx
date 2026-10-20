@@ -1,8 +1,9 @@
-import { CircleGauge, Info, PiggyBank } from 'lucide-react'
+import { CircleGauge, Info } from 'lucide-react'
 import { useState } from 'react'
 import { withPossessive } from '../../../shared/tr.ts'
-import type { CostReport, LimitHit, Limits, RangeKey } from '../../../shared/types.ts'
+import type { CostReport, LimitHit, Limits, RangeKey, TipsReport } from '../../../shared/types.ts'
 import { DailyBars, HBars, ShareBar } from '../components/charts.tsx'
+import { TipLinks } from '../components/TipLinks.tsx'
 import { Card, CardHeader, ErrorNote, Skeleton, cx } from '../components/ui.tsx'
 import { refreshNow, useApi } from '../lib/api.ts'
 import { fmtCompact, fmtDateTime, fmtDayLong, fmtDayShort, fmtDuration, fmtInt, fmtRelative, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
@@ -120,21 +121,26 @@ export function Costs() {
             )}
           </div>
         </Card>
-        <Card>
-          <CardHeader title="Tasarruf fırsatları" aside={period.lower} />
-          <ul className="px-5 pb-4">
-            {data.suggestions.length === 0 ? <li className="py-2 text-ink-2">Bu dönemde belirgin bir tasarruf fırsatı görünmüyor.</li> : null}
-            {data.suggestions.map((s) => (
-              <li key={s.text} className="flex gap-3 border-t border-line py-3 first:border-t-0">
-                <PiggyBank className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
-                <span className="flex-1 text-[14px]">{s.text}</span>
-                {s.saving ? <span className="shrink-0 font-mono text-[12px] text-good num">~{fmtUsd(s.saving)}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <SavingTips range={data.range.key} />
       </div>
     </div>
+  )
+}
+
+/** The İpuçları that are about money, for the range on screen. */
+function SavingTips({ range }: { range: RangeKey }) {
+  const { data } = useApi<TipsReport>(`/api/tips?range=${range}`, { keepPrevious: true })
+  return (
+    <Card>
+      <CardHeader title="Tasarruf ipuçları" aside={PERIOD[range].lower} />
+      {data ? (
+        <TipLinks tips={data.tips.filter((t) => t.saving !== null)} range={range} empty="Bu dönemde belirgin bir tasarruf fırsatı görünmüyor." />
+      ) : (
+        <div className="px-5 pb-5">
+          <Skeleton className="h-16 w-full" />
+        </div>
+      )}
+    </Card>
   )
 }
 

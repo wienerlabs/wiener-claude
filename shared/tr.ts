@@ -18,3 +18,19 @@ export function possessive(value: number): string {
 export function withPossessive(value: number, prefix = ''): string {
   return `${prefix}${Math.round(value)}${possessive(value)}`
 }
+
+const whole = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 })
+const oneDecimal = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 })
+
+/**
+ * Large counts in words: "12,3 bin", "72,8 milyon", "25,9 milyar". Intl's compact form writes
+ * thousands as "B", which reads as billions to most developers.
+ */
+export function compactNumber(n: number): string {
+  const abs = Math.abs(n)
+  if (abs < 1e3) return whole.format(Math.round(n))
+  for (const [size, word] of [[1e12, 'trilyon'], [1e9, 'milyar'], [1e6, 'milyon'], [1e3, 'bin']] as const) {
+    if (abs >= size) return `${oneDecimal.format(n / size)} ${word}`
+  }
+  return whole.format(n)
+}

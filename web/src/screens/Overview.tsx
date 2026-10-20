@@ -1,9 +1,10 @@
 import { ArrowUpRight, CircleAlert, X } from 'lucide-react'
 import { withPossessive } from '../../../shared/tr.ts'
-import type { DayDetail, HeatmapResponse, HeatmapView, IndexStatus, Insight, Metric, PeriodTotals, RangeKey, Summary } from '../../../shared/types.ts'
+import type { DayDetail, HeatmapResponse, HeatmapView, IndexStatus, Insight, Metric, PeriodTotals, RangeKey, Summary, TipsReport } from '../../../shared/types.ts'
 import { Calendar } from '../components/heatmap/Calendar.tsx'
 import { ProjectDay } from '../components/heatmap/ProjectDay.tsx'
 import { WeekHour } from '../components/heatmap/WeekHour.tsx'
+import { TipLinks } from '../components/TipLinks.tsx'
 import { Card, CardHeader, Delta, ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
 import {
@@ -137,6 +138,8 @@ export function Overview() {
         </Card>
         <LivePanel live={summary.data?.live ?? null} />
       </div>
+
+      <TopTips />
     </div>
   )
 }
@@ -213,6 +216,25 @@ function StatStrip({ s }: { s: Summary }) {
         </div>
       ))}
     </dl>
+  )
+}
+
+/** The two tips with the most at stake over the last 30 days. */
+function TopTips() {
+  const { data } = useApi<TipsReport>('/api/tips?range=30d', { keepPrevious: true })
+  if (!data || data.tips.length === 0) return null
+  return (
+    <Card>
+      <CardHeader
+        title="İpuçları"
+        aside={
+          <a href="/ipuclari" onClick={(e) => onLinkClick(e, '/ipuclari')} className="text-accent hover:underline hover:underline-offset-2">
+            {data.tips.length > 2 ? `${data.tips.length} ipucunun hepsi` : 'İpuçları sayfası'}
+          </a>
+        }
+      />
+      <TipLinks tips={data.tips.slice(0, 2)} range="30d" empty="" />
+    </Card>
   )
 }
 

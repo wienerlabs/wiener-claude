@@ -1,4 +1,4 @@
-import { Activity, Boxes, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
+import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Moon, Monitor, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { IndexStatus } from '../../shared/types.ts'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
@@ -12,6 +12,7 @@ import { Environment } from './screens/Environment.tsx'
 import { Overview } from './screens/Overview.tsx'
 import { Projects } from './screens/Projects.tsx'
 import { Sessions } from './screens/Sessions.tsx'
+import { Tips } from './screens/Tips.tsx'
 import { Tools } from './screens/Tools.tsx'
 import { Year } from './screens/Year.tsx'
 
@@ -21,6 +22,7 @@ const NAV = [
   { to: '/projeler', label: 'Projeler', icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
   { to: '/araclar', label: 'Araçlar', icon: Wrench, match: (p: string) => p.startsWith('/araclar') },
   { to: '/maliyet', label: 'Maliyet', icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
+  { to: '/ipuclari', label: 'İpuçları', icon: Lightbulb, match: (p: string) => p.startsWith('/ipuclari') },
   { to: '/ortam', label: 'Ortam', icon: Boxes, match: (p: string) => p.startsWith('/ortam') },
   { to: '/yil-ozeti', label: 'Yıl özeti', icon: Sparkles, match: (p: string) => p.startsWith('/yil-ozeti') },
 ]
@@ -30,6 +32,7 @@ const TITLES: [string, string][] = [
   ['/projeler', 'Projeler'],
   ['/araclar', 'Araçlar'],
   ['/maliyet', 'Maliyet'],
+  ['/ipuclari', 'İpuçları'],
   ['/ortam', 'Ortam'],
   ['/yil-ozeti', 'Yıl özeti'],
 ]
@@ -92,6 +95,8 @@ export function App() {
             <Costs />
           ) : path === '/ortam' ? (
             <Environment />
+          ) : path === '/ipuclari' ? (
+            <Tips />
           ) : path === '/araclar' ? (
             <Tools />
           ) : path === '/yil-ozeti' ? (

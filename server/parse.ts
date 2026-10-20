@@ -39,7 +39,7 @@ export type Fact =
   | ApiFact
   | { kind: 'prompt'; uuid: string; sessionId: string; ts: number; promptKind: PromptKind; preview: string }
   | { kind: 'tool_use'; id: string; sessionId: string; ts: number; name: string; mcpServer: string | null; sidechain: boolean; detail: string | null }
-  | { kind: 'tool_result'; id: string; sessionId: string; ts: number; isError: boolean; denied: string | null }
+  | { kind: 'tool_result'; id: string; sessionId: string; ts: number; isError: boolean; denied: string | null; error: string | null }
   | { kind: 'event'; uuid: string; sessionId: string; ts: number; eventKind: EventKind }
   | {
       kind: 'cost'
@@ -167,6 +167,23 @@ export function previewOf(text: string, max = 280): string {
 /** Searchable text is capped so one pasted log can't dominate the index. */
 const MAX_SEARCH_TEXT = 20_000
 const clipText = (t: string) => (t.length > MAX_SEARCH_TEXT ? t.slice(0, MAX_SEARCH_TEXT) : t)
+
+/** The start of a failed tool result: enough to tell "command not found" from a failing test. */
+const MAX_ERROR_TEXT = 400
+
+export function errorText(content: unknown): string | null {
+  let text = ''
+  if (typeof content === 'string') text = content
+  else if (Array.isArray(content)) {
+    text = content
+      .map((b) => obj(b))
+      .filter((b): b is Json => !!b && b.type === 'text' && typeof b.text === 'string')
+      .map((b) => b.text as string)
+      .join('\n')
+  }
+  text = text.trim()
+  return text ? text.slice(0, MAX_ERROR_TEXT) : null
+}
 
 /** Lines added and removed by a list of unified-diff hunks. */
 export function hunkCounts(hunks: unknown): { added: number; removed: number } {
@@ -348,7 +365,8 @@ export function parseLine(o: Json, ctx: LineContext): Fact[] {
     const denied = str(o.toolDenialKind)
     for (const r of toolResults) {
       const id = str(r.tool_use_id)
-      if (id) facts.push({ kind: 'tool_result', id, sessionId, ts, isError: r.is_error === true, denied })
+      const isError = r.is_error === true
+      if (id) facts.push({ kind: 'tool_result', id, sessionId, ts, isError, denied, error: isError && !denied ? errorText(r.content) : null })
     }
     const uuid = str(o.uuid)
     if (!uuid) return facts

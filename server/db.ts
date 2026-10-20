@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 // The index is a cache of ~/.claude. Bump this when the schema or the way records are read
 // changes; the old index is then dropped and rebuilt from the transcripts.
-const INDEX_VERSION = 5
+const INDEX_VERSION = 6
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -73,7 +73,9 @@ CREATE TABLE tool_uses (
   is_sidechain INTEGER NOT NULL DEFAULT 0,
   is_error INTEGER,
   denied TEXT,
-  detail TEXT
+  detail TEXT,
+  -- The start of a failed result's text, for telling setup mistakes from ordinary failures.
+  error TEXT
 );
 CREATE INDEX tools_day ON tool_uses(day);
 CREATE INDEX tools_session ON tool_uses(session_id);

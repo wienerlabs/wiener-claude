@@ -235,7 +235,7 @@ export class Indexer {
           }
           case 'tool_result': {
             const t = localParts(f.ts)
-            this.st.toolResult.run(f.id, f.sessionId, fileId, f.ts, t.day, t.hour, t.dow, f.isError ? 1 : 0, f.denied)
+            this.st.toolResult.run(f.id, f.sessionId, fileId, f.ts, t.day, t.hour, t.dow, f.isError ? 1 : 0, f.denied, f.error)
             break
           }
           case 'event': {
@@ -415,9 +415,9 @@ function statements(db: Db) {
     todosClear: p("DELETE FROM tasks WHERE session_id = ? AND task_id LIKE 'todo:%'"),
     todoInsert: p(`INSERT OR REPLACE INTO tasks (session_id, task_id, subject, status, created_ts, updated_ts) VALUES (?, ?, ?, ?, ?, ?)`),
     insertPlan: p('INSERT OR IGNORE INTO plans (key, session_id, ts, text) VALUES (?, ?, ?, ?)'),
-    toolResult: p(`INSERT INTO tool_uses (id, session_id, file_id, ts, day, hour, dow, is_error, denied)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET is_error = excluded.is_error, denied = excluded.denied`),
+    toolResult: p(`INSERT INTO tool_uses (id, session_id, file_id, ts, day, hour, dow, is_error, denied, error)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET is_error = excluded.is_error, denied = excluded.denied, error = excluded.error`),
     insertEvent: p(`INSERT OR IGNORE INTO events (uuid, session_id, file_id, ts, day, hour, dow, kind)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
     costState: p(`INSERT INTO cost_states (session_id, start_time, total_cost, lines_added, lines_removed, api_ms, tool_ms, duration_ms)

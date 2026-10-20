@@ -221,12 +221,6 @@ export interface CostMix {
   cacheWrite: number
 }
 
-export interface Suggestion {
-  text: string
-  /** Estimated monthly saving in dollars, when one can be computed. */
-  saving: number | null
-}
-
 export interface LimitHit {
   kind: 'five_hour' | 'seven_day' | 'other'
   at: number
@@ -273,7 +267,6 @@ export interface CostReport {
   /** Token counts behind the mix, for the same range. */
   tokens: TokenTotals
   projects: { key: string; name: string; cost: number }[]
-  suggestions: Suggestion[]
   limits: Limits
 }
 
@@ -531,4 +524,50 @@ export interface EnvReport {
   mcp: McpServer[]
   settings: SettingsView
   subagents: { type: string; calls: number }[]
+}
+
+export type TipKind =
+  | 'context'
+  | 'cache-rewrite'
+  | 'repeated-prompts'
+  | 'denials'
+  | 'setup-errors'
+  | 'interrupts'
+  | 'claude-md'
+  | 'unused-mcp'
+  | 'light-sessions'
+  | 'subagent-model'
+  | 'fast-mode'
+
+export interface TipExample {
+  label: string
+  detail: string
+  /** Opens the session this example comes from. */
+  sessionId?: string
+  /** Commands, file names and prompts read better in monospace. */
+  mono?: boolean
+}
+
+/**
+ * One piece of advice, built from what the transcripts show: what was seen, why it matters,
+ * what to do, and the examples it rests on.
+ */
+export interface Tip {
+  kind: TipKind
+  title: string
+  finding: string
+  why: string
+  action: string
+  /** Estimated dollars in the range; null when the tip is about time or friction, not money. */
+  saving: number | null
+  /** "upTo" when the figure is a ceiling, "about" when it is an estimate. */
+  savingKind: 'upTo' | 'about' | null
+  examples: TipExample[]
+  /** Something ready to paste: a CLAUDE.md line, a settings rule, a command file. */
+  snippet: { label: string; code: string } | null
+}
+
+export interface TipsReport {
+  range: RangeInfo
+  tips: Tip[]
 }
