@@ -13,17 +13,30 @@ Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.c
 - **İçgörüler:** "Bu hafta ne oldu" kartı bütçe temposunu, limit olaylarını, değişen satırları, yarım kalan görevleri ve araç hatalarını tek cümlelerle özetler; her biri ilgili ekrana bağlanır.
 - **Canlı:** dosyalar değiştikçe panel kendini günceller; açık oturumlar ayrıca listelenir.
 
-## Çalıştırma
+## Kurulum ve kullanım
 
-Node.js 22.13 veya üstü gerekir (yerleşik SQLite için).
+Node.js 22.13 veya üstü gerekir (yerleşik SQLite için). Claude Code'u kullandığın bilgisayarda çalıştırılır; verini o makinedeki `~/.claude` klasöründen okur.
+
+**Repoya erişimi olanlar için tek komut:**
 
 ```bash
+npx github:mehmethayirli/wiener-tools
+```
+
+İlk seferde repo indirilir ve derlenir (bir dakika kadar). Panel tarayıcıda kendiliğinden açılır; ilk indeksleme geçmişin büyüklüğüne göre birkaç saniye ile yarım dakika arası sürer, ilerlemesi sol altta görünür. Sonraki açılışlarda yalnızca yeni kayıtlar okunur.
+
+**Klonlayarak:**
+
+```bash
+git clone https://github.com/mehmethayirli/wiener-tools.git
+cd wiener-tools
 npm install
-npm run build
 npm start
 ```
 
-Seçenekler: `--port <n>` (varsayılan 4747), `--host <h>` (varsayılan 127.0.0.1), `--no-open`. Başka bir Claude profili için `CLAUDE_CONFIG_DIR=~/.claude-work npm start`.
+`npm install` derlemeyi de yapar. Kapatmak için terminalde Ctrl+C.
+
+Seçenekler: `--port <n>` (varsayılan 4747, doluysa bir sonraki), `--host <h>` (varsayılan 127.0.0.1), `--no-open`. Başka bir Claude profili için `CLAUDE_CONFIG_DIR=~/.claude-work npm start`.
 
 ## Geliştirme
 

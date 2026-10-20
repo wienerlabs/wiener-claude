@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"node --watch-path=server --watch-path=shared server/main.ts --no-open\" \"vite\"",
     "build": "vite build && esbuild server/main.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/server/main.js",
+    "prepare": "npm run build",
     "start": "node bin/wiener.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
