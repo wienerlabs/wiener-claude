@@ -1,0 +1,22 @@
+# The demo's data is generated relative to the day it is built. A daily redeploy keeps "today"
+# current. Needs a Vercel deploy hook URL in the VERCEL_DEPLOY_HOOK secret; without it, this skips.
+name: Demo verisini tazele
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vercel'de yeniden derle
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK tanımlı değil, atlanıyor."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" > /dev/null

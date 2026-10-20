@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { DEMO, demoJson } from './demo.ts'
 
 // Bumped whenever the server says the index changed; every useApi refetches on a bump.
 let version = 0
@@ -37,7 +38,8 @@ export function refreshNow(): void {
 
 let source: EventSource | null = null
 function connect(): void {
-  if (source || typeof EventSource === 'undefined') return
+  // The demo's data never changes, and there is no server to listen to.
+  if (DEMO || source || typeof EventSource === 'undefined') return
   source = new EventSource('/api/events')
   source.addEventListener('update', bump)
   source.addEventListener('live', bump)
@@ -59,6 +61,7 @@ export function useDataVersion(): number {
 export class ApiError extends Error {}
 
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  if (DEMO) return demoJson<T>(path, signal)
   const res = await fetch(path, { signal })
   if (!res.ok) {
     let message = `Sunucu ${res.status} döndü`

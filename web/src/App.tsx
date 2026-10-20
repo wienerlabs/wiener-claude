@@ -1,10 +1,12 @@
 import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Moon, Monitor, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { IndexStatus } from '../../shared/types.ts'
+import { DemoBanner } from './components/DemoBanner.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { Mark } from './components/Mark.tsx'
 import { cx } from './components/ui.tsx'
 import { getJson, useApi } from './lib/api.ts'
+import { DEMO } from './lib/demo.ts'
 import { fmtRelative } from './lib/format.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
 import { Costs } from './screens/Costs.tsx'
@@ -83,6 +85,7 @@ export function App() {
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-8 md:py-8">
+        {DEMO ? <DemoBanner /> : null}
         {/* Keyed by path: moving to another screen clears an error left on the previous one. */}
         <ErrorBoundary key={path}>
           {path === '/' ? (
@@ -130,6 +133,14 @@ function IndexBadge() {
     return () => clearInterval(id)
   }, [])
 
+  if (DEMO) {
+    return (
+      <div className="hidden items-center gap-1.5 text-[12px] text-ink-3 md:flex" title="Bu sayfadaki veriler uydurma">
+        <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+        Demo verisi
+      </div>
+    )
+  }
   if (!status) return null
   if (status.state === 'indexing') {
     const pct = status.bytesTotal > 0 ? Math.round((status.bytesDone / status.bytesTotal) * 100) : 0

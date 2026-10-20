@@ -15,5 +15,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["server", "shared", "web/src", "test", "vite.config.ts", "vitest.config.ts"]
+  "include": ["server", "shared", "web/src", "test", "scripts", "vite.config.ts", "vitest.config.ts"]
 }

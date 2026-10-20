@@ -6,6 +6,7 @@ import { DailyBars, HBars, ShareBar } from '../components/charts.tsx'
 import { TipLinks } from '../components/TipLinks.tsx'
 import { Card, CardHeader, ErrorNote, Skeleton, cx } from '../components/ui.tsx'
 import { refreshNow, useApi } from '../lib/api.ts'
+import { DEMO } from '../lib/demo.ts'
 import { fmtCompact, fmtDateTime, fmtDayLong, fmtDayShort, fmtDuration, fmtInt, fmtRelative, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
 import { RangePicker, rangeSpan, useRange } from '../lib/range.tsx'
 
@@ -272,6 +273,7 @@ function BudgetCard({ report }: { report: CostReport }) {
     setSaving(true)
     setError(null)
     try {
+      if (DEMO) throw new Error('Demoda bütçe kaydedilmez. Kendi panelinde npx wiener-tools-claude ile dene.')
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },

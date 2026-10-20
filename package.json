@@ -1,7 +1,7 @@
 {
   "name": "wiener-tools-claude",
-  "version": "0.6.0",
-  "description": "Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel: ısı haritaları, oturumlar, arama, maliyet ve limitler. Yerel çalışır, veri göndermez.",
+  "version": "0.6.1",
+  "description": "Claude Code kullanımın için yerel bir panel: ısı haritaları, oturum dökümleri, maliyet ve limitler, araçlar ve kanıta dayalı ipuçları. Veri makineden çıkmaz.",
   "license": "MIT",
   "author": "Wiener Labs",
   "homepage": "https://github.com/wienerlabs/wiener-claude#readme",
@@ -30,7 +30,8 @@
   },
   "files": [
     "bin",
-    "dist",
+    "dist/server",
+    "dist/web",
     "LICENSE",
     "README.md"
   ],
@@ -40,6 +41,7 @@
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"node --watch-path=server --watch-path=shared server/main.ts --no-open\" \"vite\"",
     "build": "vite build && esbuild server/main.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/server/main.js",
+    "build:demo": "vite build --mode demo --outDir ../dist/demo-site --emptyOutDir && esbuild scripts/demo/build.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/demo-build.mjs && node dist/demo-build.mjs dist/demo-site",
     "prepare": "npm run build",
     "start": "node bin/wiener.js",
     "typecheck": "tsc --noEmit",

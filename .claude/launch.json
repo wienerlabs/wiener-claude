@@ -4,8 +4,28 @@
     {
       "name": "wiener-dev",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["WIENER_PORT=4757", "WIENER_DATA_DIR=.dev-data", "npm", "run", "dev"],
+      "runtimeArgs": [
+        "WIENER_PORT=4757",
+        "WIENER_DATA_DIR=.dev-data",
+        "npm",
+        "run",
+        "dev"
+      ],
       "port": 5747
+    },
+    {
+      "name": "wiener-demo",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "../dist/demo-site",
+        "--port",
+        "5748",
+        "--strictPort"
+      ],
+      "port": 5748
     }
   ]
 }
