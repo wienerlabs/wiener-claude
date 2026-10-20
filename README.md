@@ -8,6 +8,9 @@ Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.c
 - **Tam metin arama:** bütün istemlerde, yanıtlarda ve kabuk komutlarında arar; Türkçe harfsiz yazılan aramayı da bulur ("degisiklik" → "değişiklik", "kisa" → "kısa"). Bir sonuca tıklayınca döküm o mesajda açılır.
 - **Projeler:** her projenin yıllık etkinliği, en çok değişen dosyaları, açılan PR'ları, kullanılan araçlar ve modeller. Worktree'ler kendi repolarına sayılır.
 - **Maliyet ve limitler:** aylık harcama ve ay sonu tahmini, son 30 günün günlük maliyeti, paranın token türlerine ve modellere dağılımı, limitin dolduğu anlar, şu anki 5 saatlik pencere ve tasarruf fırsatları.
+- **Bütçe:** aylık bir tutar belirlersen bu hızla hangi gün aşılacağı Maliyet'te ve Genel bakış'ta görünür.
+- **Ortam:** Claude Code'un hatırladıkları (memory), uyduğu talimatlar (`CLAUDE.md`), yarım kalan görevler ve onaya sunulan planlar, skill'ler, eklentiler, subagent türleri, MCP sunucuları ve ayarlar.
+- **İçgörüler:** "Bu hafta ne oldu" kartı bütçe temposunu, limit olaylarını, değişen satırları, yarım kalan görevleri ve araç hatalarını tek cümlelerle özetler; her biri ilgili ekrana bağlanır.
 - **Canlı:** dosyalar değiştikçe panel kendini günceller; açık oturumlar ayrıca listelenir.
 
 ## Çalıştırma
@@ -38,9 +41,12 @@ npm run typecheck
 | `~/.claude/projects/<proje>/<oturum>/subagents/**` | Subagent dökümleri; maliyetleri ana oturuma yazılır |
 | `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si |
 | `~/.claude/sessions/*.json` | Şu an çalışan Claude Code süreçleri |
-| `~/.claude.json` | Yalnızca plan adı ve Claude Code'un son limit ölçümü. E-posta, isim ve kimlikler okunmaz. |
+| `~/.claude.json` | Plan adı, son limit ölçümü, skill ve eklenti kullanım sayıları, MCP sunucularının adı ve türü. E-posta, isim ve kimlikler okunmaz. |
+| `~/.claude/projects/<proje>/memory/*.md` | Memory dosyaları |
+| `~/.claude/CLAUDE.md`, `<proje>/CLAUDE.md` | Talimatlar |
+| `~/.claude/settings.json`, `~/.claude/plugins/installed_plugins.json` | Ayarlar ve kurulu eklentiler |
 
-Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-tools/index.db` dosyasında tutar. Bu dosya silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar o dökümlerden sonra da kalır.
+Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-tools/index.db`, bütçe ayarını `~/.wiener-tools/settings.json` dosyasında tutar. Bu dosya silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar o dökümlerden sonra da kalır.
 
 ## Sayılar nasıl hesaplanıyor
 
@@ -58,12 +64,15 @@ Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-
 
 ## Güvenlik
 
-Sunucu varsayılan olarak yalnızca `127.0.0.1` adresinde dinler ve `Host` başlığını denetler; başka bir sitenin DNS rebinding ile panele erişmesi engellenir. `--host 0.0.0.0` paneli yerel ağa açar.
+- Sunucu varsayılan olarak yalnızca `127.0.0.1` adresinde dinler ve `Host` başlığını denetler; başka bir sitenin DNS rebinding ile panele erişmesi engellenir. `--host 0.0.0.0` paneli yerel ağa açar.
+- Tek yazma işlemi (bütçe) JSON gövde ister ve `Origin` başlığını denetler; başka bir sitenin tarayıcın üzerinden ayar değiştirmesi engellenir.
+- MCP sunucularının ortam değişkenleri, başlıkları ve komut argümanları; ayarlardaki ortam değişkeni değerleri ve hook komutlarının argümanları hiçbir zaman gösterilmez. Yalnızca program adı, paket adı ve uzak sunucunun alan adı görünür.
+- Dosya içerikleri yalnızca sunucunun kendi listelediği memory ve `CLAUDE.md` dosyaları için verilir; istek bir yol değil, o listedeki kimliği taşır.
 
 ## Yol haritası
 
 1. **Faz 1:** indeksleyici, Genel bakış, Oturumlar.
-2. **Faz 2 (bu sürüm):** Maliyet ve limitler, Projeler, tam metin arama.
-3. **Faz 3:** Ortam (memory, plan, görev, skill, MCP, ayarlar), daha fazla içgörü, bütçe.
+2. **Faz 2:** Maliyet ve limitler, Projeler, tam metin arama.
+3. **Faz 3 (bu sürüm):** Ortam (memory, talimatlar, görevler ve planlar, skill'ler, eklentiler, MCP, ayarlar), bütçe, daha fazla içgörü.
 
 Desktop oturum klasörünün yolu yalnızca macOS'ta doğrulandı; Windows ve Linux yolları Electron varsayılanlarına göre tahmin ediliyor.

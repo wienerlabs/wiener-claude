@@ -1,10 +1,11 @@
 import { CircleGauge, Info, PiggyBank } from 'lucide-react'
+import { useState } from 'react'
 import { withPossessive } from '../../../shared/tr.ts'
 import type { CostReport, LimitHit, Limits } from '../../../shared/types.ts'
 import { DailyBars, HBars, ShareBar } from '../components/charts.tsx'
 import { Card, CardHeader, ErrorNote, Skeleton, cx } from '../components/ui.tsx'
-import { useApi } from '../lib/api.ts'
-import { fmtDateTime, fmtDuration, fmtInt, fmtRelative, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
+import { refreshNow, useApi } from '../lib/api.ts'
+import { fmtDateTime, fmtDayShort, fmtDuration, fmtInt, fmtRelative, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
 
 export function Costs() {
   const { data, error } = useApi<CostReport>('/api/costs')
@@ -47,6 +48,8 @@ export function Costs() {
           className="border-t border-l border-line lg:border-t-0"
         />
       </dl>
+
+      <BudgetCard report={data} />
 
       <Card>
         <CardHeader title="Son 30 gün" aside="günlük tahmini maliyet" />
@@ -231,5 +234,120 @@ function Meter({ label, percent, resetsAt }: { label: string; percent: number; r
       </div>
       {resetsAt ? <p className="mt-0.5 text-[12px] text-ink-3">{fmtDateTime(resetsAt)} sıfırlanır</p> : null}
     </div>
+  )
+}
+
+function BudgetCard({ report }: { report: CostReport }) {
+  const budget = report.budget
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const save = async (monthlyBudget: number | null) => {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ monthlyBudget }),
+      })
+      if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? 'Kaydedilemedi')
+      setEditing(false)
+      refreshNow()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const amount = Number(value.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, ''))
+    if (!value.trim() || !Number.isFinite(amount) || amount <= 0) {
+      setError('Sıfırdan büyük bir tutar gir, örneğin 500')
+      return
+    }
+    void save(amount)
+  }
+
+  const form = (
+    <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
+      <label className="flex h-9 items-center gap-1 rounded-lg border border-line bg-surface px-3 focus-within:border-accent">
+        <span className="text-ink-3">$</span>
+        <span className="sr-only">Aylık bütçe (dolar)</span>
+        <input
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setError(null)
+          }}
+          placeholder="500"
+          className="w-28 bg-transparent font-mono text-[14px] outline-none placeholder:text-ink-3"
+          autoFocus={editing}
+        />
+      </label>
+      <button type="submit" disabled={saving} className="h-9 rounded-lg bg-accent px-4 text-[13px] font-medium text-white disabled:opacity-60 dark:text-bg">
+        {saving ? 'Kaydediliyor…' : 'Bütçeyi kaydet'}
+      </button>
+      {budget ? (
+        <button type="button" onClick={() => setEditing(false)} className="h-9 rounded-lg px-3 text-[13px] text-ink-2 hover:text-ink">
+          Vazgeç
+        </button>
+      ) : null}
+      {error ? <p role="alert" className="w-full text-[13px] text-danger">{error}</p> : null}
+    </form>
+  )
+
+  if (!budget || editing) {
+    return (
+      <Card>
+        <CardHeader title="Aylık bütçe" />
+        <div className="space-y-2 px-5 pb-5">
+          {!budget ? <p className="text-[13px] text-ink-2">Bir tutar belirlersen, bu hızla ne zaman aşacağını burada ve Genel bakış'ta görürsün. Tutar liste fiyatı üzerinden karşılaştırılır.</p> : null}
+          {form}
+        </div>
+      </Card>
+    )
+  }
+
+  const m = report.month
+  const used = m.cost / budget.monthly
+  const projected = m.projected / budget.monthly
+  const over = m.cost >= budget.monthly
+  return (
+    <Card>
+      <CardHeader
+        title="Aylık bütçe"
+        aside={
+          <span className="flex gap-3">
+            <button type="button" onClick={() => { setValue(String(budget.monthly)); setEditing(true) }} className="text-accent hover:underline">Değiştir</button>
+            <button type="button" onClick={() => void save(null)} className="text-ink-3 hover:text-ink">Kaldır</button>
+          </span>
+        }
+      />
+      <div className="px-5 pb-5">
+        <p className="text-[14px]">
+          <span className="font-display text-[22px] font-semibold num">{fmtUsd(m.cost)}</span>
+          <span className="text-ink-2"> / {fmtUsd(budget.monthly)}</span>
+        </p>
+        <div className="relative mt-2 h-2.5 rounded-full bg-line/60" role="img" aria-label={`Bütçenin ${withPossessive(used * 100, '%')} kullanıldı, ay sonu tahmini %${Math.round(projected * 100)}`}>
+          <div className={cx('h-full rounded-full', over ? 'bg-danger' : 'bg-[var(--heat-3)]')} style={{ width: `${Math.min(100, used * 100)}%` }} />
+          {/* The projection, as a tick where the month would end at today's pace. */}
+          <span className="absolute top-[-3px] h-4 w-0.5 rounded-full bg-ink" style={{ left: `calc(${Math.min(100, projected * 100)}% - 1px)` }} aria-hidden />
+        </div>
+        <p className={cx('mt-2 text-[13px]', over || budget.crossesOn ? 'text-danger' : 'text-ink-2')}>
+          {over
+            ? `Bütçe ${budget.crossesOn ? fmtDayShort(budget.crossesOn) : 'bu ay'} tarihinde aşıldı.`
+            : budget.crossesOn
+              ? `Bu hızla ay sonunda yaklaşık ${fmtUsd(m.projected)}; bütçe ${fmtDayShort(budget.crossesOn)} tarihinde aşılır.`
+              : `Bu hızla ay sonunda yaklaşık ${fmtUsd(m.projected)}; bütçenin içinde kalıyorsun.`}
+        </p>
+        <p className="mt-1 text-[12px] text-ink-3">Çizgi, bugünkü hızla ayın nerede biteceğini gösterir.</p>
+        {error ? <p role="alert" className="mt-2 text-[13px] text-danger">{error}</p> : null}
+      </div>
+    </Card>
   )
 }

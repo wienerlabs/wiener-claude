@@ -2,6 +2,7 @@ import type {
   DayDetail, HeatmapResponse, HeatmapView, Insight, Metric, SessionList, SessionRow, SessionSource, Summary,
 } from '../shared/types.ts'
 import type { Db } from './db.ts'
+import { budgetCrossing } from './costs.ts'
 import { matchFor, searchSessions } from './search.ts'
 import { withPossessive } from '../shared/tr.ts'
 import { addDays, today, weekStart } from './time.ts'
@@ -301,13 +302,46 @@ function branchName(b: string | null): string | null {
 
 const pct = (x: number) => `%${Math.round(x * 100)}`
 const pctOf = (x: number) => withPossessive(x * 100, '%')
+const intFmt = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 })
+const int = (v: number) => intFmt.format(v)
+const usdFmt = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+const usd = (v: number) => usdFmt.format(v)
+const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
+const dayMonth = (day: string) => `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`
 
-/** A few plain sentences about this week, each only when the data supports it. */
-export function insights(db: Db): Insight[] {
+/** A few plain sentences about this week, each only when the data supports it, most pressing first. */
+export function insights(db: Db, monthlyBudget: number | null = null): Insight[] {
   const t = today()
   const ws = weekStart(t)
   const lastWs = addDays(ws, -7)
-  const out: Insight[] = []
+  const ranked: { rank: number; insight: Insight }[] = []
+  const add = (rank: number, insight: Insight) => ranked.push({ rank, insight })
+  const wsMs = Date.parse(`${ws}T00:00:00`)
+
+  if (monthlyBudget) {
+    const first = `${t.slice(0, 7)}-01`
+    const daily = all(db, 'SELECT day, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day ORDER BY day', first, t).map((r) => ({
+      day: String(r.day), cost: n(r.cost),
+    }))
+    const monthCost = daily.reduce((s, d) => s + d.cost, 0)
+    const [y, m] = t.split('-').map(Number) as [number, number]
+    const elapsed = Math.max(1, (Date.now() - new Date(y, m - 1, 1).getTime()) / 86_400_000)
+    const crosses = budgetCrossing(daily, monthlyBudget, monthCost, elapsed, first, new Date(y, m, 0).getDate())
+    if (monthCost >= monthlyBudget) {
+      add(0, { tone: 'warn', href: '/maliyet', text: `Aylık ${usd(monthlyBudget)} bütçeni aştın; bu ay ${usd(monthCost)} harcandı.` })
+    } else if (crosses) {
+      add(0, { tone: 'warn', href: '/maliyet', text: `Bu hızla aylık ${usd(monthlyBudget)} bütçeni ${dayMonth(crosses)} tarihinde aşacaksın.` })
+    } else {
+      add(9, { tone: 'good', href: '/maliyet', text: `Bu ay ${usd(monthCost)} harcandı; bu hızla ${usd(monthlyBudget)} bütçenin içinde kalıyorsun.` })
+    }
+  }
+
+  const hits = all(db, `SELECT kind, count(*) AS c FROM (SELECT kind, resets_at, min(ts) AS at FROM limit_hits GROUP BY kind, resets_at)
+    WHERE at >= ? GROUP BY kind`, wsMs)
+  const hitText = hits
+    .map((h) => `${h.kind === 'seven_day' ? 'haftalık' : h.kind === 'five_hour' ? '5 saatlik' : 'bir'} limite ${n(h.c)} kez`)
+    .join(', ')
+  if (hitText) add(1, { tone: 'warn', href: '/maliyet', text: `Bu hafta ${hitText} takıldın.` })
 
   const byProject = all(db, `SELECT COALESCE(s.project_name, 'Bilinmeyen') AS name, sum(a.cost) AS cost
     FROM api_calls a LEFT JOIN sessions s ON s.id = a.session_id WHERE a.day BETWEEN ? AND ?
@@ -315,7 +349,29 @@ export function insights(db: Db): Insight[] {
   const weekCost = byProject.reduce((s, r) => s + n(r.cost), 0)
   const topProject = byProject[0]
   if (topProject && byProject.length > 1 && weekCost > 1 && n(topProject.cost) / weekCost >= 0.3) {
-    out.push({ tone: 'neutral', text: `Bu haftaki maliyetin ${pctOf(n(topProject.cost) / weekCost)} tek projeden geldi: ${topProject.name}.` })
+    add(2, { tone: 'neutral', text: `Bu haftaki maliyetin ${pctOf(n(topProject.cost) / weekCost)} tek projeden geldi: ${topProject.name}.` })
+  }
+
+  const lines = all(db, `SELECT s.project_key AS key, COALESCE(s.project_name, 'Bilinmeyen') AS name, sum(e.added) AS added, sum(e.removed) AS removed
+    FROM file_edits e LEFT JOIN sessions s ON s.id = e.session_id WHERE e.day BETWEEN ? AND ?
+    GROUP BY s.project_key ORDER BY sum(e.added) + sum(e.removed) DESC`, ws, t)
+  const added = lines.reduce((s, r) => s + n(r.added), 0)
+  const removed = lines.reduce((s, r) => s + n(r.removed), 0)
+  const topLines = lines[0]
+  if (topLines && added + removed >= 50) {
+    const key = typeof topLines.key === 'string' && topLines.key.startsWith('/') ? topLines.key : null
+    add(3, {
+      tone: 'neutral',
+      href: key ? `/projeler/${encodeURIComponent(key)}` : undefined,
+      text: `Bu hafta Claude ${int(added)} satır ekledi, ${int(removed)} satır sildi. En çok değişen proje: ${topLines.name}.`,
+    })
+  }
+
+  // Tasks still open in sessions nobody has touched for a day.
+  const stale = one(db, `SELECT count(*) AS tasks, count(DISTINCT t.session_id) AS sessions FROM tasks t JOIN sessions s ON s.id = t.session_id
+    WHERE t.status IN ('pending', 'in_progress') AND s.last_ts < ?`, Date.now() - 86_400_000)
+  if (stale && n(stale.tasks) > 0) {
+    add(4, { tone: 'neutral', href: '/ortam?bolum=gorevler', text: `${int(n(stale.sessions))} oturumda ${int(n(stale.tasks))} görev yarım kaldı.` })
   }
 
   const errors = all(db, `SELECT name, count(*) AS c FROM tool_uses
@@ -323,13 +379,13 @@ export function insights(db: Db): Insight[] {
   const errTotal = errors.reduce((s, r) => s + n(r.c), 0)
   const topErr = errors[0]
   if (topErr && errTotal >= 5) {
-    out.push({
+    add(5, {
       tone: 'warn',
       text: n(topErr.c) === errTotal
         ? `Bu hafta ${errTotal} araç hatası oldu, hepsi ${topErr.name} aracında.`
         : n(topErr.c) / errTotal >= 0.4
-        ? `Araç hatalarının çoğu ${topErr.name} aracından: ${errTotal} hatanın ${withPossessive(n(topErr.c))}.`
-        : `Bu hafta ${errTotal} araç hatası oldu, en çok ${topErr.name} aracında (${n(topErr.c)}).`,
+          ? `Araç hatalarının çoğu ${topErr.name} aracından: ${errTotal} hatanın ${withPossessive(n(topErr.c))}.`
+          : `Bu hafta ${errTotal} araç hatası oldu, en çok ${topErr.name} aracında (${n(topErr.c)}).`,
     })
   }
 
@@ -344,20 +400,23 @@ export function insights(db: Db): Insight[] {
   if (now !== null && before !== null) {
     const diff = Math.round((now - before) * 100)
     if (Math.abs(diff) >= 3) {
-      out.push({
+      add(6, {
         tone: diff > 0 ? 'good' : 'warn',
         text: `Önbellek isabet oranın ${pct(now)}, geçen haftadan ${Math.abs(diff)} puan ${diff > 0 ? 'yüksek' : 'düşük'}.`,
       })
     } else {
-      out.push({ tone: 'neutral', text: `Önbellek isabet oranın ${pct(now)}, geçen haftayla aynı seviyede.` })
+      add(8, { tone: 'neutral', text: `Önbellek isabet oranın ${pct(now)}, geçen haftayla aynı seviyede.` })
     }
   }
+
+  const interrupts = n(one(db, `SELECT count(*) AS c FROM events WHERE kind = 'interrupt' AND day BETWEEN ? AND ?`, ws, t)?.c)
+  if (interrupts >= 5) add(7, { tone: 'neutral', text: `Bu hafta ${int(interrupts)} yanıtı yarıda kestin.` })
 
   const peak = one(db, `SELECT hour, count(*) AS c FROM prompts WHERE day BETWEEN ? AND ? GROUP BY hour ORDER BY c DESC LIMIT 1`,
     addDays(t, -27), t)
   if (peak && n(peak.c) >= 10) {
     const h = n(peak.hour)
-    out.push({ tone: 'neutral', text: `Son dört haftada en çok ${String(h).padStart(2, '0')}:00–${String((h + 1) % 24).padStart(2, '0')}:00 arasında yazdın.` })
+    add(8, { tone: 'neutral', text: `Son dört haftada en çok ${String(h).padStart(2, '0')}:00–${String((h + 1) % 24).padStart(2, '0')}:00 arasında yazdın.` })
   }
-  return out
+  return ranked.sort((a, b) => a.rank - b.rank).slice(0, 6).map((r) => r.insight)
 }

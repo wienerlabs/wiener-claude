@@ -231,7 +231,35 @@ function suggestions(db: Db, pricing: Pricing, from: string, to: string, monthCo
   return out
 }
 
-export function costReport(db: Db, pricing: Pricing, account: AccountInfo | null, now = Date.now()): CostReport {
+/**
+ * The day spend crosses the budget: the day it already did, or the day the current daily pace
+ * reaches it, if that falls within this month.
+ */
+export function budgetCrossing(
+  daily: { day: string; cost: number }[],
+  budget: number,
+  monthCost: number,
+  elapsedDays: number,
+  monthFirst: string,
+  daysInMonth: number,
+): string | null {
+  if (monthCost >= budget) {
+    let sum = 0
+    for (const d of daily) {
+      sum += d.cost
+      if (sum >= budget) return d.day
+    }
+    return daily.at(-1)?.day ?? null
+  }
+  const rate = monthCost / elapsedDays
+  if (rate <= 0) return null
+  const days = budget / rate
+  if (days > daysInMonth) return null
+  // Calendar arithmetic, not milliseconds, so a DST change can't shift the day.
+  return addDays(monthFirst, Math.floor(days))
+}
+
+export function costReport(db: Db, pricing: Pricing, account: AccountInfo | null, now = Date.now(), monthlyBudget: number | null = null): CostReport {
   const t = today()
   const mb = monthBounds(t)
   const monthRows = sums(db, 'day BETWEEN ? AND ?', mb.first, t)
@@ -279,7 +307,13 @@ export function costReport(db: Db, pricing: Pricing, account: AccountInfo | null
       FROM api_calls a LEFT JOIN sessions s ON s.id = a.session_id WHERE a.day BETWEEN ? AND ?
       GROUP BY key ORDER BY cost DESC LIMIT 8`).all(mb.first, t) as Row[]).map((r) => ({ key: String(r.key), name: String(r.name), cost: n(r.cost) }))
 
+  const monthDaily = (db.prepare('SELECT day, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day ORDER BY day').all(mb.first, t) as Row[]).map(
+    (r) => ({ day: String(r.day), cost: n(r.cost) }),
+  )
   return {
+    budget: monthlyBudget
+      ? { monthly: monthlyBudget, crossesOn: budgetCrossing(monthDaily, monthlyBudget, monthCost, elapsedDays, mb.first, mb.daysInMonth) }
+      : null,
     month: {
       from: mb.first, to: t, cost: monthCost,
       projected: (monthCost / elapsedDays) * mb.daysInMonth,

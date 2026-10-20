@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 // The index is a cache of ~/.claude. Bump this when the schema or the way records are read
 // changes; the old index is then dropped and rebuilt from the transcripts.
-const INDEX_VERSION = 4
+const INDEX_VERSION = 5
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -72,7 +72,8 @@ CREATE TABLE tool_uses (
   mcp_server TEXT,
   is_sidechain INTEGER NOT NULL DEFAULT 0,
   is_error INTEGER,
-  denied TEXT
+  denied TEXT,
+  detail TEXT
 );
 CREATE INDEX tools_day ON tool_uses(day);
 CREATE INDEX tools_session ON tool_uses(session_id);
@@ -149,6 +150,23 @@ CREATE TABLE limit_hits (
   resets_at INTEGER
 );
 
+CREATE TABLE tasks (
+  session_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_ts INTEGER NOT NULL,
+  updated_ts INTEGER NOT NULL,
+  PRIMARY KEY (session_id, task_id)
+);
+
+CREATE TABLE plans (
+  key TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  text TEXT NOT NULL
+);
+
 CREATE TABLE desktop_sessions (
   cli_session_id TEXT PRIMARY KEY,
   desktop_id TEXT,
@@ -213,7 +231,7 @@ export function transaction<T>(db: Db, fn: () => T): T {
 /** Removes everything derived from ~/.claude, keeping settings in meta. */
 export function clearIndex(db: Db): void {
   transaction(db, () => {
-    for (const t of ['files', 'sessions', 'api_calls', 'prompts', 'tool_uses', 'events', 'cost_states', 'prs', 'desktop_sessions', 'texts', 'file_edits', 'limit_hits']) {
+    for (const t of ['files', 'sessions', 'api_calls', 'prompts', 'tool_uses', 'events', 'cost_states', 'prs', 'desktop_sessions', 'texts', 'file_edits', 'limit_hits', 'tasks', 'plans']) {
       db.exec(`DELETE FROM ${t}`)
     }
   })

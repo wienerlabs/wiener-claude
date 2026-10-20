@@ -110,7 +110,14 @@ export function Overview() {
                   className={cx('mt-[7px] size-1.5 shrink-0 rounded-full', i.tone === 'warn' ? 'bg-danger' : i.tone === 'good' ? 'bg-good' : 'bg-ink-3')}
                   aria-hidden
                 />
-                <span className="text-[14px]">{i.text}</span>
+                {i.href ? (
+                  <a href={i.href} onClick={(e) => onLinkClick(e, i.href as string)} className="group inline-flex flex-1 items-start justify-between gap-2 text-[14px]">
+                    <span className="group-hover:underline group-hover:underline-offset-2">{i.text}</span>
+                    <ArrowUpRight className="mt-0.5 size-4 shrink-0 text-ink-3 group-hover:text-ink" aria-hidden />
+                  </a>
+                ) : (
+                  <span className="text-[14px]">{i.text}</span>
+                )}
               </li>
             ))}
           </ul>

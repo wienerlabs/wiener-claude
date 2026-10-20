@@ -3,9 +3,36 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 // Bumped whenever the server says the index changed; every useApi refetches on a bump.
 let version = 0
 const listeners = new Set<() => void>()
-const bump = () => {
+const fire = () => {
   version++
   for (const l of listeners) l()
+}
+
+// A running session changes the index every second or so; refetching that often only burns CPU.
+// Bumps are coalesced to at most one per interval, always followed by a trailing one.
+const MIN_INTERVAL = 4000
+let last = 0
+let pending: ReturnType<typeof setTimeout> | null = null
+const bump = () => {
+  const wait = last + MIN_INTERVAL - Date.now()
+  if (wait <= 0) {
+    last = Date.now()
+    fire()
+  } else if (!pending) {
+    pending = setTimeout(() => {
+      pending = null
+      last = Date.now()
+      fire()
+    }, wait)
+  }
+}
+
+/** Refetches everything at once, skipping the throttle; for right after the person saved something. */
+export function refreshNow(): void {
+  if (pending) clearTimeout(pending)
+  pending = null
+  last = Date.now()
+  fire()
 }
 
 let source: EventSource | null = null

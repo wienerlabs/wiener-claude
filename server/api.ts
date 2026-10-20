@@ -8,11 +8,13 @@ import type { HeatmapView, Metric, ReplayPage, SessionSource } from '../shared/t
 import type { Db } from './db.ts'
 import type { Indexer } from './indexer.ts'
 import { costReport, readAccount } from './costs.ts'
+import { envReport, fileContent } from './env.ts'
 import { liveSessions } from './live.ts'
 import type { Pricing } from './pricing.ts'
 import { projectDetail, projectList } from './projects.ts'
 import * as q from './queries.ts'
 import { turnsOf } from './replay.ts'
+import { SettingsError, readSettings, updateSettings } from './settings.ts'
 
 export interface AppContext {
   db: Db
@@ -44,6 +46,25 @@ export function createApp(ctx: AppContext): Hono {
     await next()
   })
 
+  // Blocks cross-site writes: a JSON body forces a CORS preflight this server never approves, and
+  // a request that does carry an Origin must come from the panel itself.
+  app.use('/api/*', async (c, next) => {
+    if (c.req.method === 'GET' || c.req.method === 'HEAD') return next()
+    if (!(c.req.header('content-type') ?? '').startsWith('application/json')) return c.json({ error: 'JSON bekleniyor' }, 415)
+    const origin = c.req.header('origin')
+    if (origin) {
+      let host = ''
+      try {
+        host = new URL(origin).hostname
+      } catch {
+        return c.json({ error: 'Geçersiz Origin' }, 403)
+      }
+      const ok = ctx.allowedHosts ? ctx.allowedHosts.has(host) || ctx.allowedHosts.has(`[${host}]`) : host === hostname(c.req.header('host'))
+      if (!ok) return c.json({ error: 'Bu istek panelden gelmeli' }, 403)
+    }
+    return next()
+  })
+
   app.get('/api/status', (c) => c.json(ctx.indexer.status))
 
   app.get('/api/summary', async (c) => c.json(q.summary(db, await liveSessions(db))))
@@ -65,7 +86,38 @@ export function createApp(ctx: AppContext): Hono {
     return c.json(q.day(db, day))
   })
 
-  app.get('/api/insights', (c) => c.json(q.insights(db)))
+  app.get('/api/insights', (c) => c.json(q.insights(db, readSettings().monthlyBudget)))
+
+  app.get('/api/settings', (c) => c.json(readSettings()))
+
+  app.put('/api/settings', async (c) => {
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Geçersiz JSON' }, 400)
+    }
+    try {
+      const saved = updateSettings(body)
+      ctx.events.emit('update')
+      return c.json(saved)
+    } catch (err) {
+      if (err instanceof SettingsError) return c.json({ error: err.message }, 400)
+      throw err
+    }
+  })
+
+  // Reads a few hundred small files; while sessions run, the panel asks again every few seconds.
+  let envCache: { at: number; report: ReturnType<typeof envReport> } | null = null
+  app.get('/api/env', (c) => {
+    if (!envCache || Date.now() - envCache.at > 5000) envCache = { at: Date.now(), report: envReport(db) }
+    return c.json(envCache.report)
+  })
+
+  app.get('/api/env/file/:id', (c) => {
+    const content = fileContent(db, c.req.param('id'))
+    return content ? c.json(content) : c.json({ error: 'Dosya bulunamadı' }, 404)
+  })
 
   app.get('/api/projects', (c) => c.json(projectList(db)))
 
@@ -74,7 +126,7 @@ export function createApp(ctx: AppContext): Hono {
     return detail ? c.json(detail) : c.json({ error: 'Proje bulunamadı' }, 404)
   })
 
-  app.get('/api/costs', (c) => c.json(costReport(db, ctx.pricing, readAccount())))
+  app.get('/api/costs', (c) => c.json(costReport(db, ctx.pricing, readAccount(), Date.now(), readSettings().monthlyBudget)))
 
   app.get('/api/sessions', (c) => {
     const source = c.req.query('source')

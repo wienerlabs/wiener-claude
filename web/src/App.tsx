@@ -1,4 +1,4 @@
-import { Activity, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sun } from 'lucide-react'
+import { Activity, Boxes, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { IndexStatus } from '../../shared/types.ts'
 import { cx } from './components/ui.tsx'
@@ -6,6 +6,7 @@ import { getJson, useApi } from './lib/api.ts'
 import { fmtRelative } from './lib/format.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
 import { Costs } from './screens/Costs.tsx'
+import { Environment } from './screens/Environment.tsx'
 import { Overview } from './screens/Overview.tsx'
 import { Projects } from './screens/Projects.tsx'
 import { Sessions } from './screens/Sessions.tsx'
@@ -15,12 +16,14 @@ const NAV = [
   { to: '/oturumlar', label: 'Oturumlar', icon: Activity, match: (p: string) => p.startsWith('/oturumlar') },
   { to: '/projeler', label: 'Projeler', icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
   { to: '/maliyet', label: 'Maliyet', icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
+  { to: '/ortam', label: 'Ortam', icon: Boxes, match: (p: string) => p.startsWith('/ortam') },
 ]
 
 const TITLES: [string, string][] = [
   ['/oturumlar', 'Oturumlar'],
   ['/projeler', 'Projeler'],
   ['/maliyet', 'Maliyet'],
+  ['/ortam', 'Ortam'],
 ]
 
 export function App() {
@@ -76,6 +79,8 @@ export function App() {
           <Projects selectedKey={projectKey} />
         ) : path === '/maliyet' ? (
           <Costs />
+        ) : path === '/ortam' ? (
+          <Environment />
         ) : (
           <NotFound />
         )}

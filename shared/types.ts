@@ -70,6 +70,8 @@ export interface DayDetail {
 export interface Insight {
   text: string
   tone: 'neutral' | 'good' | 'warn'
+  /** Where to look closer, when there is a screen for it. */
+  href?: string
 }
 
 export type SessionSource = 'cli' | 'desktop' | 'other'
@@ -216,8 +218,15 @@ export interface Limits {
   hits: LimitHit[]
 }
 
+export interface Budget {
+  monthly: number
+  /** Day of the month the projection crosses the budget; null when it doesn't this month. */
+  crossesOn: string | null
+}
+
 export interface CostReport {
   month: { from: string; to: string; cost: number; projected: number; lastMonth: number; lastMonthToDate: number; hidden: number }
+  budget: Budget | null
   cacheSavings: number
   daily: DailyCost[]
   models: ModelCost[]
@@ -262,4 +271,115 @@ export interface ProjectDetail extends ProjectSummary {
   prs: { url: string; number: number | null; repo: string | null; ts: number; sessionId: string; title: string }[]
   tools: { name: string; calls: number; errors: number }[]
   models: { model: string; cost: number }[]
+}
+
+export interface Settings {
+  /** Monthly budget in dollars at list price; null when none is set. */
+  monthlyBudget: number | null
+}
+
+export type MemoryType = 'user' | 'feedback' | 'project' | 'reference' | 'index' | 'other'
+
+export interface MemoryFile {
+  id: string
+  name: string
+  description: string | null
+  type: MemoryType
+  projectName: string
+  file: string
+  mtime: number
+  size: number
+}
+
+export interface InstructionFile {
+  id: string
+  /** "Kullanıcı" for ~/.claude/CLAUDE.md, otherwise the project's name. */
+  scope: string
+  file: string
+  mtime: number
+  size: number
+}
+
+export interface FileContent {
+  id: string
+  file: string
+  text: string
+  truncated: boolean
+}
+
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'deleted'
+
+export interface TaskGroup {
+  sessionId: string
+  title: string
+  projectName: string
+  lastTs: number
+  tasks: { id: string; subject: string; status: TaskStatus; updatedTs: number }[]
+}
+
+export interface PlanItem {
+  key: string
+  sessionId: string
+  sessionTitle: string
+  projectName: string
+  ts: number
+  title: string
+  text: string
+  /** approved: the plan was accepted; rejected: the person asked for changes. */
+  outcome: 'approved' | 'rejected' | 'unknown'
+}
+
+export interface SkillItem {
+  name: string
+  description: string | null
+  /** Where it comes from: a plugin name, "Kullanıcı", a project, or "Claude Code". */
+  source: string
+  uses: number
+  lastUsedAt: number | null
+}
+
+export interface PluginItem {
+  name: string
+  marketplace: string | null
+  version: string | null
+  enabled: boolean
+  installedAt: number | null
+  uses: number
+}
+
+export interface McpServer {
+  name: string
+  /** Where it is configured: "Kullanıcı", "Proje: …", "claude.ai bağlayıcısı", "Desktop uygulaması", or "Yapılandırma bulunamadı". */
+  scope: string
+  transport: 'stdio' | 'http' | 'sse' | null
+  /** Program name for stdio servers, host for remote ones. Never arguments, headers or env. */
+  target: string | null
+  calls: number
+  errors: number
+  lastUsedAt: number | null
+  topTools: string[]
+}
+
+export interface SettingsView {
+  file: string | null
+  values: { key: string; value: string }[]
+  allow: string[]
+  deny: string[]
+  ask: string[]
+  hooks: { event: string; matcher: string | null; command: string }[]
+  /** Environment variable names only; values are never read out. */
+  envKeys: string[]
+  otherKeys: string[]
+}
+
+export interface EnvReport {
+  memory: MemoryFile[]
+  instructions: InstructionFile[]
+  tasks: TaskGroup[]
+  plans: PlanItem[]
+  skills: SkillItem[]
+  plugins: PluginItem[]
+  mcp: McpServer[]
+  settings: SettingsView
+  subagents: { type: string; calls: number }[]
 }

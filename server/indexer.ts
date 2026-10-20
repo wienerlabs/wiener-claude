@@ -225,7 +225,7 @@ export class Indexer {
           }
           case 'tool_use': {
             const t = localParts(f.ts)
-            this.st.toolUse.run(f.id, f.sessionId, fileId, f.ts, t.day, t.hour, t.dow, f.name, f.mcpServer, f.sidechain ? 1 : 0)
+            this.st.toolUse.run(f.id, f.sessionId, fileId, f.ts, t.day, t.hour, t.dow, f.name, f.mcpServer, f.sidechain ? 1 : 0, f.detail)
             break
           }
           case 'tool_result': {
@@ -256,6 +256,17 @@ export class Indexer {
             break
           case 'limit_hit':
             this.st.insertLimitHit.run(f.uuid, f.sessionId, f.ts, f.limitKind, f.resetsAt)
+            break
+          case 'task':
+            if (f.op === 'create') this.st.taskCreate.run(f.sessionId, f.taskId, f.subject, f.ts, f.ts)
+            else if (f.op === 'update') this.st.taskUpdate.run(f.status, f.subject, f.ts, f.sessionId, f.taskId)
+            else {
+              this.st.todosClear.run(f.sessionId)
+              f.todos.forEach((t, i) => this.st.todoInsert.run(f.sessionId, `todo:${i}`, t.subject, t.status, f.ts, f.ts))
+            }
+            break
+          case 'plan':
+            this.st.insertPlan.run(f.key, f.sessionId, f.ts, f.text)
             break
         }
       }
@@ -368,12 +379,19 @@ function statements(db: Db) {
         web_search = excluded.web_search, fast = excluded.fast, cost = excluded.cost`),
     insertPrompt: p(`INSERT OR IGNORE INTO prompts (uuid, session_id, file_id, ts, day, hour, dow, kind, preview)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-    toolUse: p(`INSERT INTO tool_uses (id, session_id, file_id, ts, day, hour, dow, name, mcp_server, is_sidechain)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    toolUse: p(`INSERT INTO tool_uses (id, session_id, file_id, ts, day, hour, dow, name, mcp_server, is_sidechain, detail)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET session_id = excluded.session_id, file_id = excluded.file_id, ts = excluded.ts,
         day = excluded.day, hour = excluded.hour, dow = excluded.dow, name = excluded.name,
-        mcp_server = excluded.mcp_server, is_sidechain = excluded.is_sidechain
+        mcp_server = excluded.mcp_server, is_sidechain = excluded.is_sidechain, detail = excluded.detail
       WHERE tool_uses.name IS NULL`),
+    taskCreate: p(`INSERT INTO tasks (session_id, task_id, subject, status, created_ts, updated_ts) VALUES (?, ?, ?, 'pending', ?, ?)
+      ON CONFLICT(session_id, task_id) DO UPDATE SET subject = excluded.subject`),
+    taskUpdate: p(`UPDATE tasks SET status = COALESCE(?, status), subject = COALESCE(?, subject), updated_ts = MAX(updated_ts, ?)
+      WHERE session_id = ? AND task_id = ?`),
+    todosClear: p("DELETE FROM tasks WHERE session_id = ? AND task_id LIKE 'todo:%'"),
+    todoInsert: p(`INSERT OR REPLACE INTO tasks (session_id, task_id, subject, status, created_ts, updated_ts) VALUES (?, ?, ?, ?, ?, ?)`),
+    insertPlan: p('INSERT OR IGNORE INTO plans (key, session_id, ts, text) VALUES (?, ?, ?, ?)'),
     toolResult: p(`INSERT INTO tool_uses (id, session_id, file_id, ts, day, hour, dow, is_error, denied)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET is_error = excluded.is_error, denied = excluded.denied`),

@@ -38,7 +38,7 @@ export type Fact =
   | SessionFact
   | ApiFact
   | { kind: 'prompt'; uuid: string; sessionId: string; ts: number; promptKind: PromptKind; preview: string }
-  | { kind: 'tool_use'; id: string; sessionId: string; ts: number; name: string; mcpServer: string | null; sidechain: boolean }
+  | { kind: 'tool_use'; id: string; sessionId: string; ts: number; name: string; mcpServer: string | null; sidechain: boolean; detail: string | null }
   | { kind: 'tool_result'; id: string; sessionId: string; ts: number; isError: boolean; denied: string | null }
   | { kind: 'event'; uuid: string; sessionId: string; ts: number; eventKind: EventKind }
   | {
@@ -57,6 +57,14 @@ export type Fact =
   | { kind: 'text'; key: string; sessionId: string; ts: number; textKind: TextKind; text: string }
   | { kind: 'file_edit'; key: string; sessionId: string; ts: number; path: string; tool: EditTool; added: number; removed: number }
   | { kind: 'limit_hit'; uuid: string; sessionId: string; ts: number; limitKind: LimitKind; resetsAt: number | null }
+  | TaskFact
+  | { kind: 'plan'; key: string; sessionId: string; ts: number; text: string }
+
+export type TaskFact =
+  | { kind: 'task'; op: 'create'; sessionId: string; ts: number; taskId: string; subject: string }
+  | { kind: 'task'; op: 'update'; sessionId: string; ts: number; taskId: string; status: string | null; subject: string | null }
+  /** TodoWrite replaces the whole list each time. */
+  | { kind: 'task'; op: 'todos'; sessionId: string; ts: number; todos: { subject: string; status: string }[] }
 
 export type TextKind = 'prompt' | 'reply' | 'command'
 export type EditTool = 'edit' | 'write' | 'bash'
@@ -223,6 +231,13 @@ function fileEdits(tur: Json, uuid: string, sessionId: string, ts: number): Fact
   return out
 }
 
+/** The part of a tool call worth counting: which skill ran, which kind of subagent was spawned. */
+function toolDetail(name: string, input: Json): string | null {
+  if (name === 'Skill') return str(input.skill) ?? str(input.command)
+  if (name === 'Agent' || name === 'Task') return str(input.subagent_type) ?? 'general-purpose'
+  return null
+}
+
 function mcpServerOf(name: string): string | null {
   if (!name.startsWith('mcp__')) return null
   return name.split('__')[1] || null
@@ -304,9 +319,23 @@ export function parseLine(o: Json, ctx: LineContext): Fact[] {
         const id = str(block.id)
         const name = str(block.name)
         if (!id || !name) return
-        facts.push({ kind: 'tool_use', id, sessionId, ts, name, mcpServer: mcpServerOf(name), sidechain })
-        const command = name === 'Bash' ? str(obj(block.input)?.command) : null
-        if (command && !ctx.isSubagent) facts.push({ kind: 'text', key: id, sessionId, ts, textKind: 'command', text: command.slice(0, 300) })
+        const input = obj(block.input) ?? {}
+        facts.push({ kind: 'tool_use', id, sessionId, ts, name, mcpServer: mcpServerOf(name), sidechain, detail: toolDetail(name, input) })
+        if (ctx.isSubagent) return
+        const command = name === 'Bash' ? str(input.command) : null
+        if (command) facts.push({ kind: 'text', key: id, sessionId, ts, textKind: 'command', text: command.slice(0, 300) })
+        if (name === 'TaskUpdate' && (typeof input.taskId === 'string' || typeof input.taskId === 'number')) {
+          facts.push({ kind: 'task', op: 'update', sessionId, ts, taskId: String(input.taskId), status: str(input.status), subject: str(input.subject) })
+        }
+        if (name === 'TodoWrite' && Array.isArray(input.todos)) {
+          const todos = input.todos
+            .map((t) => obj(t))
+            .filter((t): t is Json => !!t && typeof t.content === 'string')
+            .map((t) => ({ subject: t.content as string, status: str(t.status) ?? 'pending' }))
+          facts.push({ kind: 'task', op: 'todos', sessionId, ts, todos })
+        }
+        const plan = name === 'ExitPlanMode' ? str(input.plan) : null
+        if (plan) facts.push({ kind: 'plan', key: id, sessionId, ts, text: plan.slice(0, 50_000) })
       })
     }
     return facts
@@ -326,6 +355,11 @@ export function parseLine(o: Json, ctx: LineContext): Fact[] {
     const tur = obj(o.toolUseResult)
     if (tur && toolResults.length > 0 && !toolResults.some((r) => r.is_error === true)) {
       facts.push(...fileEdits(tur, uuid, sessionId, ts))
+      const task = obj(tur.task)
+      const taskId = task && (typeof task.id === 'string' || typeof task.id === 'number') ? String(task.id) : null
+      if (task && taskId && typeof task.subject === 'string' && !ctx.isSubagent) {
+        facts.push({ kind: 'task', op: 'create', sessionId, ts, taskId, subject: task.subject })
+      }
     }
     if (toolResults.length > 0 || ctx.isSubagent) return facts
     if (text.trimStart().startsWith('[Request interrupted')) {
