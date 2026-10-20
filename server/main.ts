@@ -4,28 +4,48 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAdaptorServer } from '@hono/node-server'
+import { type Lang, isLang, pick } from '../shared/i18n.ts'
 import { createApp } from './api.ts'
 import { openDb } from './db.ts'
 import { Indexer } from './indexer.ts'
-import { dataDir, desktopSessionsDir, liveSessionsDir, projectsDir } from './paths.ts'
+import { dataDir, desktopSessionsDir, liveSessionsDir, projectsDir, terminalLang } from './paths.ts'
 import { Pricing } from './pricing.ts'
 
 const VERSION = '0.6.2'
-const HELP = `Wiener Tools for Claude Code ${VERSION}: Claude Code kullanımını yerelde gösterir.
+const LANG = terminalLang()
+const L = (tr: string, en: string) => pick(LANG, tr, en)
+
+const HELP = L(
+  `Wiener Tools for Claude Code ${VERSION}: Claude Code kullanımını yerelde gösterir.
 
 Kullanım: wiener-tools-claude [seçenekler]
 
   --port <n>    Dinlenecek port (varsayılan 4747, doluysa bir sonraki)
   --host <h>    Bağlanılacak adres (varsayılan 127.0.0.1). 0.0.0.0 panelini yerel ağa açar.
+  --lang <dil>  Panelin dili: tr ya da en (varsayılan tarayıcının dili)
   --no-open     Tarayıcıyı açma
   -h, --help    Bu yardımı göster
   -v, --version Sürümü göster
 
-Ortam değişkenleri: CLAUDE_CONFIG_DIR, WIENER_DATA_DIR, WIENER_PORT
-`
+Ortam değişkenleri: CLAUDE_CONFIG_DIR, WIENER_DATA_DIR, WIENER_PORT, WIENER_LANG
+`,
+  `Wiener Tools for Claude Code ${VERSION}: your Claude Code usage, shown locally.
+
+Usage: wiener-tools-claude [options]
+
+  --port <n>    Port to listen on (default 4747, or the next free one)
+  --host <h>    Address to bind (default 127.0.0.1). 0.0.0.0 opens the panel to your local network.
+  --lang <lang> Panel language: tr or en (default: your browser's language)
+  --no-open     Don't open the browser
+  -h, --help    Show this help
+  -v, --version Show the version
+
+Environment variables: CLAUDE_CONFIG_DIR, WIENER_DATA_DIR, WIENER_PORT, WIENER_LANG
+`,
+)
 
 function parseArgs(argv: string[]) {
-  const opts = { port: Number(process.env.WIENER_PORT ?? 4747), host: '127.0.0.1', open: true }
+  const opts: { port: number; host: string; open: boolean; lang: Lang | null } = { port: Number(process.env.WIENER_PORT ?? 4747), host: '127.0.0.1', open: true, lang: null }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '-h' || a === '--help') {
@@ -36,14 +56,21 @@ function parseArgs(argv: string[]) {
       process.exit(0)
     } else if (a === '--port') opts.port = Number(argv[++i])
     else if (a === '--host') opts.host = String(argv[++i])
-    else if (a === '--no-open') opts.open = false
+    else if (a === '--lang') {
+      const lang = argv[++i]
+      if (!isLang(lang)) {
+        process.stderr.write(L('--lang tr ya da en olmalı\n', '--lang must be tr or en\n'))
+        process.exit(1)
+      }
+      opts.lang = lang
+    } else if (a === '--no-open') opts.open = false
     else {
-      process.stderr.write(`Bilinmeyen seçenek: ${a}\n\n${HELP}`)
+      process.stderr.write(`${L('Bilinmeyen seçenek', 'Unknown option')}: ${a}\n\n${HELP}`)
       process.exit(1)
     }
   }
   if (!Number.isInteger(opts.port) || opts.port < 1 || opts.port > 65535) {
-    process.stderr.write('--port 1 ile 65535 arasında bir sayı olmalı\n')
+    process.stderr.write(L('--port 1 ile 65535 arasında bir sayı olmalı\n', '--port must be a number between 1 and 65535\n'))
     process.exit(1)
   }
   return opts
@@ -97,8 +124,11 @@ async function main(): Promise<void> {
   })
 
   const url = `http://${lan ? 'localhost' : opts.host === '127.0.0.1' ? 'localhost' : opts.host}:${port}`
-  process.stdout.write(`\n  Wiener Tools for Claude Code  ${url}\n  Okunan klasör: ${projectsDir()}\n  Kendi verisi:  ${dataDir()}\n`)
-  if (lan) process.stdout.write('  Uyarı: panel yerel ağdaki herkese açık.\n')
+  process.stdout.write(L(
+    `\n  Wiener Tools for Claude Code  ${url}\n  Okunan klasör: ${projectsDir()}\n  Kendi verisi:  ${dataDir()}\n`,
+    `\n  Wiener Tools for Claude Code  ${url}\n  Reading:   ${projectsDir()}\n  Own data:  ${dataDir()}\n`,
+  ))
+  if (lan) process.stdout.write(L('  Uyarı: panel yerel ağdaki herkese açık.\n', '  Warning: the panel is open to everyone on your local network.\n'))
   process.stdout.write('\n')
 
   let timer: NodeJS.Timeout | null = null
@@ -106,24 +136,25 @@ async function main(): Promise<void> {
     if (timer) return
     timer = setTimeout(() => {
       timer = null
-      indexer.scan().then((changed) => changed && events.emit('update'), (err) => console.error('wiener-tools-claude: tarama hatası', err))
+      indexer.scan().then((changed) => changed && events.emit('update'), (err) => console.error(`wiener-tools-claude: ${L('tarama hatası', 'scan failed')}`, err))
     }, 750)
   }
   const started = Date.now()
   indexer.scan().then(
     (changed) => {
       const files = (db.prepare('SELECT count(*) AS c FROM files').get() as { c: number }).c
-      process.stdout.write(`  İndeks hazır: ${files} dosya, ${((Date.now() - started) / 1000).toFixed(1)} sn\n`)
+      const secs = ((Date.now() - started) / 1000).toFixed(1)
+      process.stdout.write(L(`  İndeks hazır: ${files} dosya, ${secs} sn\n`, `  Index ready: ${files} ${files === 1 ? 'file' : 'files'}, ${secs}s\n`))
       if (changed) events.emit('update')
     },
-    (err) => console.error('wiener-tools-claude: ilk tarama başarısız', err),
+    (err) => console.error(`wiener-tools-claude: ${L('ilk tarama başarısız', 'first scan failed')}`, err),
   )
   watch(projectsDir(), rescan)
   watch(desktopSessionsDir(), rescan)
   watch(liveSessionsDir(), () => events.emit('live'))
   setInterval(rescan, 60_000).unref()
 
-  if (opts.open) openBrowser(url)
+  if (opts.open) openBrowser(opts.lang ? `${url}/?lang=${opts.lang}` : url)
 
   const shutdown = () => {
     server.close()

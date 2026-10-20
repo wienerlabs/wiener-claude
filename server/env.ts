@@ -5,6 +5,7 @@ import path from 'node:path'
 import type {
   EnvReport, FileContent, InstructionFile, McpServer, MemoryFile, MemoryType, PlanItem, PluginItem, SettingsView, SkillItem, TaskGroup, TaskStatus,
 } from '../shared/types.ts'
+import { type Lang, pick } from '../shared/i18n.ts'
 import type { Db } from './db.ts'
 import { claudeDir, projectsDir } from './paths.ts'
 
@@ -123,10 +124,10 @@ function projectRoots(db: Db, claudeJson: Json | null): { root: string; name: st
   return [...roots].map(([root, name]) => ({ root, name }))
 }
 
-export function instructionFiles(db: Db, claudeJson: Json | null = readClaudeJson()): (InstructionFile & { path: string })[] {
+export function instructionFiles(db: Db, claudeJson: Json | null = readClaudeJson(), lang: Lang = 'tr'): (InstructionFile & { path: string })[] {
   const out: (InstructionFile & { path: string })[] = []
   const seen = new Set<string>()
-  const add = (file: string, scope: string) => {
+  const add = (file: string, scope: string, scopeKind: InstructionFile['scopeKind']) => {
     const st = statOf(file)
     if (!st) return
     let real = file
@@ -137,14 +138,17 @@ export function instructionFiles(db: Db, claudeJson: Json | null = readClaudeJso
     }
     if (seen.has(real)) return
     seen.add(real)
-    out.push({ id: idOf(file), path: file, scope, file: short(file), mtime: st.mtimeMs, size: st.size })
+    out.push({ id: idOf(file), path: file, scope, scopeKind, file: short(file), mtime: st.mtimeMs, size: st.size })
   }
-  add(path.join(claudeDir(), 'CLAUDE.md'), 'Kullanıcı')
+  add(path.join(claudeDir(), 'CLAUDE.md'), userScope(lang), 'user')
   for (const { root, name } of projectRoots(db, claudeJson)) {
-    for (const f of ['CLAUDE.md', 'CLAUDE.local.md', path.join('.claude', 'CLAUDE.md')]) add(path.join(root, f), name)
+    for (const f of ['CLAUDE.md', 'CLAUDE.local.md', path.join('.claude', 'CLAUDE.md')]) add(path.join(root, f), name, 'project')
   }
   return out.sort((a, b) => b.mtime - a.mtime)
 }
+
+/** Things configured for the person rather than for a project. */
+const userScope = (lang: Lang) => pick(lang, 'Kullanıcı', 'User')
 
 const MAX_FILE = 200_000
 
@@ -259,8 +263,8 @@ function plugins(settings: Json | null, claudeJson: Json | null): PluginItem[] {
     .sort((a, b) => b.uses - a.uses || a.name.localeCompare(b.name))
 }
 
-function skills(db: Db, claudeJson: Json | null, roots: { root: string; name: string }[]): SkillItem[] {
-  const defined: { name: string; description: string | null; source: string }[] = [...skillsIn(path.join(claudeDir(), 'skills'), 'Kullanıcı')]
+function skills(db: Db, claudeJson: Json | null, roots: { root: string; name: string }[], lang: Lang): SkillItem[] {
+  const defined: { name: string; description: string | null; source: string }[] = [...skillsIn(path.join(claudeDir(), 'skills'), userScope(lang))]
   for (const p of installedPlugins()) {
     const dir = str(p.entry.installPath)
     if (dir) defined.push(...skillsIn(path.join(dir, 'skills'), p.name))
@@ -333,19 +337,20 @@ export function mcpTarget(config: Json): { transport: McpServer['transport']; ta
 const DESKTOP_SERVERS = new Set(['Claude_Browser', 'Claude_Code_iOS_Simulator', 'visualize', 'computer-use', 'claude-in-chrome', 'terminal', 'mcp-registry', 'scheduled-tasks'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
-function mcpServers(db: Db, claudeJson: Json | null, roots: { root: string; name: string }[]): McpServer[] {
+function mcpServers(db: Db, claudeJson: Json | null, roots: { root: string; name: string }[], lang: Lang): McpServer[] {
   const servers = new Map<string, McpServer>()
-  const configure = (name: string, scope: string, config: Json) => {
+  const configure = (name: string, scope: string, scopeKind: 'user' | 'project', config: Json) => {
     if (servers.has(name)) return
-    servers.set(name, { name, scope, ...mcpTarget(config), calls: 0, errors: 0, lastUsedAt: null, topTools: [] })
+    servers.set(name, { name, scope, scopeKind, ...mcpTarget(config), calls: 0, errors: 0, lastUsedAt: null, topTools: [] })
   }
-  for (const [name, c] of Object.entries(obj(claudeJson?.mcpServers) ?? {})) if (obj(c)) configure(name, 'Kullanıcı', c as Json)
+  const projectScope = (name: string) => pick(lang, `Proje: ${name}`, `Project: ${name}`)
+  for (const [name, c] of Object.entries(obj(claudeJson?.mcpServers) ?? {})) if (obj(c)) configure(name, userScope(lang), 'user', c as Json)
   for (const [root, p] of Object.entries(obj(claudeJson?.projects) ?? {})) {
-    for (const [name, c] of Object.entries(obj(obj(p)?.mcpServers) ?? {})) if (obj(c)) configure(name, `Proje: ${path.basename(root)}`, c as Json)
+    for (const [name, c] of Object.entries(obj(obj(p)?.mcpServers) ?? {})) if (obj(c)) configure(name, projectScope(path.basename(root)), 'project', c as Json)
   }
   for (const { root, name: project } of roots) {
     for (const [name, c] of Object.entries(obj(readJson(path.join(root, '.mcp.json'))?.mcpServers) ?? {})) {
-      if (obj(c)) configure(name, `Proje: ${project} (.mcp.json)`, c as Json)
+      if (obj(c)) configure(name, projectScope(`${project} (.mcp.json)`), 'project', c as Json)
     }
   }
   const usage = db.prepare(`SELECT mcp_server, count(*) AS calls, sum(CASE WHEN is_error = 1 AND denied IS NULL THEN 1 ELSE 0 END) AS errors, max(ts) AS last
@@ -354,14 +359,20 @@ function mcpServers(db: Db, claudeJson: Json | null, roots: { root: string; name
   for (const r of usage) {
     const name = String(r.mcp_server)
     if (!servers.has(name)) {
-      const scope = UUID.test(name)
-        ? 'claude.ai connector'
+      const scopeKind = UUID.test(name)
+        ? 'connector'
         : name.startsWith('ccd_') || DESKTOP_SERVERS.has(name)
-          ? 'Desktop uygulaması'
+          ? 'desktop'
           : name.startsWith('plugin_')
-            ? 'Plugin'
-            : 'Yapılandırma bulunamadı'
-      servers.set(name, { name, scope, transport: null, target: null, calls: 0, errors: 0, lastUsedAt: null, topTools: [] })
+            ? 'plugin'
+            : 'unconfigured'
+      const scope = {
+        connector: 'claude.ai connector',
+        desktop: pick(lang, 'Desktop uygulaması', 'Desktop app'),
+        plugin: 'Plugin',
+        unconfigured: pick(lang, 'Yapılandırma bulunamadı', 'No config found'),
+      }[scopeKind]
+      servers.set(name, { name, scope, scopeKind, transport: null, target: null, calls: 0, errors: 0, lastUsedAt: null, topTools: [] })
     }
     const s = servers.get(name) as McpServer
     s.calls = n(r.calls)
@@ -409,12 +420,12 @@ export function settingsView(settings: Json | null, file: string | null): Settin
 }
 
 /** Configured and used MCP servers, without the rest of the environment. */
-export function mcpServerList(db: Db): McpServer[] {
+export function mcpServerList(db: Db, lang: Lang = 'tr'): McpServer[] {
   const claudeJson = readClaudeJson()
-  return mcpServers(db, claudeJson, projectRoots(db, claudeJson))
+  return mcpServers(db, claudeJson, projectRoots(db, claudeJson), lang)
 }
 
-export function envReport(db: Db): EnvReport {
+export function envReport(db: Db, lang: Lang = 'tr'): EnvReport {
   const claudeJson = readClaudeJson()
   const settingsFile = path.join(claudeDir(), 'settings.json')
   const settings = readJson(settingsFile)
@@ -424,12 +435,12 @@ export function envReport(db: Db): EnvReport {
   const strip = <T extends { path: string }>(xs: T[]) => xs.map(({ path: _p, ...rest }) => rest)
   return {
     memory: strip(memoryFiles(db)),
-    instructions: strip(instructionFiles(db, claudeJson)),
+    instructions: strip(instructionFiles(db, claudeJson, lang)),
     tasks: taskGroups(db),
     plans: plans(db),
-    skills: skills(db, claudeJson, roots),
+    skills: skills(db, claudeJson, roots, lang),
     plugins: plugins(settings, claudeJson),
-    mcp: mcpServers(db, claudeJson, roots),
+    mcp: mcpServers(db, claudeJson, roots, lang),
     settings: settingsView(settings, settingsFile),
     subagents,
   }

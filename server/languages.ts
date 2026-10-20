@@ -14,16 +14,17 @@ const BY_EXT: Record<string, string> = {
   vue: 'Vue', svelte: 'Svelte', astro: 'Astro',
   sh: 'Shell', bash: 'Shell', zsh: 'Shell', fish: 'Shell', ps1: 'PowerShell',
   tf: 'Terraform', nix: 'Nix',
-  md: 'Markdown', mdx: 'Markdown', rst: 'Markdown', txt: 'Metin',
+  md: 'Markdown', mdx: 'Markdown', rst: 'Markdown', txt: 'Text',
   json: 'JSON', jsonc: 'JSON', json5: 'JSON', yml: 'YAML', yaml: 'YAML', toml: 'TOML', xml: 'XML', svg: 'SVG', csv: 'CSV',
 }
 
 const BY_NAME: Record<string, string> = { Dockerfile: 'Dockerfile', Makefile: 'Makefile', Gemfile: 'Ruby', Rakefile: 'Ruby' }
 
 /** Docs, data and config: shown in the breakdown, but they don't make a project a "Markdown project". */
-const NOT_CODE = new Set(['Markdown', 'Metin', 'JSON', 'YAML', 'TOML', 'XML', 'SVG', 'CSV', 'Diğer'])
+const NOT_CODE = new Set(['Markdown', 'Text', 'JSON', 'YAML', 'TOML', 'XML', 'SVG', 'CSV', 'Other'])
 
-export const OTHER = 'Diğer'
+/** The interface shows "Text" and "Other" in the person's language. */
+export const OTHER = 'Other'
 
 export function languageOf(filePath: string): string {
   const base = filePath.slice(filePath.lastIndexOf('/') + 1)
@@ -33,7 +34,7 @@ export function languageOf(filePath: string): string {
   return BY_EXT[base.slice(dot + 1).toLowerCase()] ?? OTHER
 }
 
-/** Changed lines per language, largest first; "Diğer" goes last whatever its size. */
+/** Changed lines per language, largest first; "Other" goes last whatever its size. */
 export function languageShares(rows: { path: string; lines: number; edits: number }[]): LanguageShare[] {
   const by = new Map<string, LanguageShare>()
   for (const r of rows) {

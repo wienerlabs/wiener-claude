@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DailyCost } from '../../../shared/types.ts'
-import { MONTHS_SHORT, fmtDayLong, fmtDayShort, fmtUsd, modelName, parseDay } from '../lib/format.ts'
+import { fmtDayLong, fmtDayMonthShort, fmtDayShort, fmtUsd, modelName, monthsShort, parseDay } from '../lib/format.ts'
+import { tx } from '../lib/i18n.ts'
 import { HEAT, levelOf, quartiles, useTooltip } from './heatmap/scale.tsx'
 
 function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -29,7 +30,7 @@ export function DailyBars({ data, bucket = 'day', height = 180 }: { data: DailyC
   const [wrap, width] = useWidth<HTMLDivElement>()
   const { box, show, hide, node } = useTooltip()
   const max0 = niceMax(Math.max(...data.map((d) => d.cost), 0))
-  const axisLabel = (v: number) => fmtUsd(v).replace(/,00$/, '')
+  const axisLabel = (v: number) => fmtUsd(v).replace(tx(/,00$/, /\.00$/), '')
   // Wide enough for the longest axis label ("$5.000"), in 11px monospace.
   const axis = Math.max(36, axisLabel(max0).length * 7 + 12)
   const bottom = 20
@@ -47,7 +48,7 @@ export function DailyBars({ data, bucket = 'day', height = 180 }: { data: DailyC
     <div ref={box} className="relative" onMouseLeave={hide}>
       <div ref={wrap} className="w-full">
         {width > 0 ? (
-          <svg width={width} height={height} role="img" aria-label={bucket === 'week' ? 'Haftalık maliyet' : 'Günlük maliyet'}>
+          <svg width={width} height={height} role="img" aria-label={bucket === 'week' ? tx('Haftalık maliyet', 'Weekly cost') : tx('Günlük maliyet', 'Daily cost')}>
             {[0, 0.5, 1].map((f) => (
               <g key={f}>
                 <line x1={axis} x2={width} y1={y(max * f)} y2={y(max * f)} stroke="var(--line)" strokeWidth={1} />
@@ -62,11 +63,11 @@ export function DailyBars({ data, bucket = 'day', height = 180 }: { data: DailyC
               const date = parseDay(d.day)
               const label =
                 bucket === 'week'
-                  ? date.getDate() <= 7 ? MONTHS_SHORT[date.getMonth()] ?? '' : ''
+                  ? date.getDate() <= 7 ? monthsShort()[date.getMonth()] ?? '' : ''
                   : data.length <= 10
-                    ? i === 0 || date.getDate() === 1 ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : String(date.getDate())
-                    : i === 0 || date.getDate() === 1 ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : date.getDay() === 1 ? String(date.getDate()) : ''
-              const when = bucket === 'week' ? `${fmtDayShort(d.day)} haftası` : fmtDayLong(d.day)
+                    ? i === 0 || date.getDate() === 1 ? fmtDayMonthShort(date) : String(date.getDate())
+                    : i === 0 || date.getDate() === 1 ? fmtDayMonthShort(date) : date.getDay() === 1 ? String(date.getDate()) : ''
+              const when = bucket === 'week' ? tx(`${fmtDayShort(d.day)} haftası`, `Week of ${fmtDayShort(d.day)}`) : fmtDayLong(d.day)
               const rows = Object.entries(d.byModel)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 4)
@@ -132,7 +133,7 @@ export function ShareBar({ parts, format }: { parts: { label: string; value: num
   const shown = parts.filter((p) => p.value > 0)
   return (
     <div>
-      <div className="flex h-3 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={shown.map((p) => `${p.label} %${Math.round((p.value / total) * 100)}`).join(', ')}>
+      <div className="flex h-3 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={shown.map((p) => tx(`${p.label} %${Math.round((p.value / total) * 100)}`, `${p.label} ${Math.round((p.value / total) * 100)}%`)).join(', ')}>
         {shown.map((p) => (
           <span key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />
         ))}
@@ -145,7 +146,7 @@ export function ShareBar({ parts, format }: { parts: { label: string; value: num
               {p.label}
               {p.detail ? <span className="block text-[12px] text-ink-3 num">{p.detail}</span> : null}
             </span>
-            <span className="font-mono text-[12px] num">{total > 0 ? `%${Math.round((p.value / total) * 100)}` : '—'}</span>
+            <span className="font-mono text-[12px] num">{total > 0 ? tx(`%${Math.round((p.value / total) * 100)}`, `${Math.round((p.value / total) * 100)}%`) : '—'}</span>
             <span className="w-20 text-right font-mono text-[12px] text-ink-2 num">{format(p.value)}</span>
           </li>
         ))}

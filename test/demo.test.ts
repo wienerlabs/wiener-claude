@@ -45,3 +45,23 @@ describe('demo data', () => {
     fs.rmSync(again, { recursive: true, force: true })
   })
 })
+
+describe('demo data in English', () => {
+  it('describes the same sessions as the Turkish data, in English', async () => {
+    const now = new Date(2026, 9, 21, 15, 0)
+    const index = async (lang: 'tr' | 'en') => {
+      const home = fs.mkdtempSync(path.join(os.tmpdir(), 'wiener-demo-test-'))
+      generateDemoHome({ home, now, lang })
+      const db = openDb(':memory:')
+      await new Indexer(db, new Pricing(), { projectsDir: path.join(home, '.claude', 'projects'), desktopDir: null }).scan()
+      fs.rmSync(home, { recursive: true, force: true })
+      return q.sessions(db, { range: 'all', limit: 200 }).rows
+    }
+    const tr = await index('tr')
+    const en = await index('en')
+    const shape = (rows: typeof tr) => rows.map((r) => ({ id: r.id, project: r.projectName, start: r.firstTs, end: r.lastTs, messages: r.messages, cost: r.costEstimate, added: r.linesAdded }))
+    expect(shape(en)).toEqual(shape(tr))
+    expect(en.map((r) => r.title)).not.toEqual(tr.map((r) => r.title))
+    for (const r of en) expect(r.title).not.toMatch(/[çğıöşüÇĞİÖŞÜ]/)
+  })
+})

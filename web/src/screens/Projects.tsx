@@ -5,11 +5,13 @@ import { DailyBars, HBars, MiniStrip, ShareBar } from '../components/charts.tsx'
 import { Calendar } from '../components/heatmap/Calendar.tsx'
 import { Card, CardHeader, ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
-import { METRIC_LABEL, fmtDateTime, fmtInt, fmtRelative, fmtUsd, mcpServerLabel, modelName } from '../lib/format.ts'
-import { RangePicker, useRange } from '../lib/range.tsx'
+import { fmtCount, fmtDateTime, fmtInt, fmtRelative, fmtUsd, languageLabel, mcpServerLabel, metricLabel, modelName } from '../lib/format.ts'
+import { tx } from '../lib/i18n.ts'
+import { RangePicker, rangeLabel, useRange } from '../lib/range.tsx'
 import { onLinkClick } from '../lib/router.ts'
 
-const RANGE_LOWER: Record<RangeKey, string> = { week: 'bu hafta', '30d': 'son 30 günde', all: 'toplam' }
+const rangeLower = (range: RangeKey) =>
+  range === 'week' ? tx('bu hafta', 'this week') : range === '30d' ? tx('son 30 günde', 'last 30 days') : tx('toplam', 'all time')
 /** Links keep the selected range, so the detail page opens on the same period. */
 const withRange = (path: string, range: RangeKey) => (range === '30d' ? path : `${path}${path.includes('?') ? '&' : '?'}donem=${range === 'week' ? 'hafta' : 'tum'}`)
 const projectHref = (key: string, range: RangeKey) => withRange(`/projeler/${encodeURIComponent(key)}`, range)
@@ -25,14 +27,19 @@ function ProjectList() {
     <div className="mx-auto max-w-[1180px] space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-        <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">Projeler</h1>
-        <p className="text-[14px] text-ink-2">Worktree'ler kendi repolarına sayılır. Klasör seçmeden açılan Desktop oturumları tek satırda toplanır.</p>
+        <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">{tx('Projeler', 'Projects')}</h1>
+        <p className="text-[14px] text-ink-2">
+          {tx(
+            "Worktree'ler kendi repolarına sayılır. Klasör seçmeden açılan Desktop oturumları tek satırda toplanır.",
+            'Worktrees count toward the repo they belong to. Desktop sessions started without a folder are grouped into one row.',
+          )}
+        </p>
         </div>
         <RangePicker value={range} onChange={setRange} />
       </header>
       {error ? <ErrorNote message={error} /> : null}
       {!data && !error ? <div className="space-y-2">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : null}
-      {data?.length === 0 ? <p className="text-ink-2">{range === 'all' ? 'Henüz bir proje yok.' : 'Bu dönemde etkinliği olan proje yok.'}</p> : null}
+      {data?.length === 0 ? <p className="text-ink-2">{range === 'all' ? tx('Henüz bir proje yok.', 'No projects yet.') : tx('Bu dönemde etkinliği olan proje yok.', 'No project activity in this period.')}</p> : null}
       {data && data.length > 0 ? (
         <ul className={cx('overflow-hidden rounded-xl border border-line bg-surface transition-opacity', stale && 'opacity-60')} aria-busy={stale}>
           {data.map((p) => (
@@ -45,15 +52,18 @@ function ProjectList() {
                 <span className="min-w-0">
                   <span className="flex min-w-0 items-baseline gap-2">
                     <span className="truncate text-[15px] font-medium">{p.name}</span>
-                    {p.language ? <span className="shrink-0 rounded-full border border-line px-1.5 text-[11px] text-ink-2">{p.language}</span> : null}
+                    {p.language ? <span className="shrink-0 rounded-full border border-line px-1.5 text-[11px] text-ink-2">{languageLabel(p.language)}</span> : null}
                   </span>
-                  <span className="block truncate font-mono text-[12px] text-ink-3">{p.path ? p.path.replace(/^\/Users\/[^/]+/, '~') : 'farklı klasörler'}</span>
+                  <span className="block truncate font-mono text-[12px] text-ink-3">{p.path ? p.path.replace(/^\/Users\/[^/]+/, '~') : tx('farklı klasörler', 'various folders')}</span>
                   <span className="mt-1 block text-[12px] text-ink-2 num">
-                    {RANGE_LOWER[range]} {fmtInt(range === 'all' ? p.sessions : p.rangeSessions)} oturum, {fmtInt(p.rangeMessages)} mesaj, {fmtUsd(p.rangeCost)} · son etkinlik {fmtRelative(p.lastTs)}
+                    {tx(
+                      `${rangeLower(range)} ${fmtInt(range === 'all' ? p.sessions : p.rangeSessions)} oturum, ${fmtInt(p.rangeMessages)} mesaj, ${fmtUsd(p.rangeCost)} · son etkinlik ${fmtRelative(p.lastTs)}`,
+                      `${rangeLabel(range)}: ${fmtCount(range === 'all' ? p.sessions : p.rangeSessions, 'oturum', 'session')}, ${fmtCount(p.rangeMessages, 'mesaj', 'message')}, ${fmtUsd(p.rangeCost)} · last active ${fmtRelative(p.lastTs)}`,
+                    )}
                   </span>
                 </span>
                 <span className="self-center">
-                  <MiniStrip values={p.strip} label={`${p.name}: son 12 haftanın günlük mesajları`} />
+                  <MiniStrip values={p.strip} label={tx(`${p.name}: son 12 haftanın günlük mesajları`, `${p.name}: daily messages over the last 12 weeks`)} />
                 </span>
                 <span className="hidden min-w-0 self-center lg:block">
                   {p.topFiles.length ? (
@@ -63,7 +73,7 @@ function ProjectList() {
                       ))}
                     </span>
                   ) : (
-                    <span className="text-[12px] text-ink-3">Dosya değişikliği yok</span>
+                    <span className="text-[12px] text-ink-3">{tx('Dosya değişikliği yok', 'No file changes')}</span>
                   )}
                 </span>
               </a>
@@ -91,7 +101,7 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
   return (
     <div className="mx-auto max-w-[1180px] space-y-6">
       <a href={withRange('/projeler', range)} onClick={(e) => onLinkClick(e, withRange('/projeler', range))} className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden /> Bütün projeler
+        <ArrowLeft className="size-4" aria-hidden /> {tx('Bütün projeler', 'All projects')}
       </a>
       {error ? <ErrorNote message={error} /> : null}
       {!data && !error ? <Skeleton className="h-28 w-full" /> : null}
@@ -107,33 +117,48 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
 
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line max-sm:[&>*:last-child]:col-span-2 sm:grid-cols-5">
             <Stat
-              label="Oturum"
+              label={tx('Oturum', 'Sessions')}
               value={fmtInt(range === 'all' ? data.sessions : data.rangeSessions)}
-              note={range === 'all' ? `${fmtDateTime(data.firstTs)} başladı` : `toplam ${fmtInt(data.sessions)}`}
+              note={
+                range === 'all'
+                  ? tx(`${fmtDateTime(data.firstTs)} başladı`, `started ${fmtDateTime(data.firstTs)}`)
+                  : tx(`toplam ${fmtInt(data.sessions)}`, `${fmtInt(data.sessions)} total`)
+              }
             />
-            <Stat label="Mesaj" value={fmtInt(data.messages)} note={`${fmtInt(data.prompts)} prompt`} />
-            <Stat label="Maliyet" value={fmtUsd(data.rangeCost)} note={range === 'all' ? 'tahmini liste fiyatı' : `toplam ${fmtUsd(data.cost)}`} />
+            <Stat label={tx('Mesaj', 'Messages')} value={fmtInt(data.messages)} note={fmtCount(data.prompts, 'prompt', 'prompt')} />
             <Stat
-              label="Değişen satır"
+              label={tx('Maliyet', 'Cost')}
+              value={fmtUsd(data.rangeCost)}
+              note={range === 'all' ? tx('tahmini liste fiyatı', 'estimated at list prices') : tx(`toplam ${fmtUsd(data.cost)}`, `${fmtUsd(data.cost)} total`)}
+            />
+            <Stat
+              label={tx('Değişen satır', 'Lines changed')}
               value={`+${fmtInt(data.linesAdded)}`}
               note={<span className="text-danger">−{fmtInt(data.linesRemoved)}</span>}
             />
-            <Stat label="Araç çağrısı" value={fmtInt(data.toolCalls)} note={data.toolErrors ? <span className="text-danger">{fmtInt(data.toolErrors)} hata</span> : 'hatasız'} />
+            <Stat
+              label={tx('Araç çağrısı', 'Tool calls')}
+              value={fmtInt(data.toolCalls)}
+              note={data.toolErrors ? <span className="text-danger">{fmtCount(data.toolErrors, 'hata', 'error')}</span> : tx('hatasız', 'no errors')}
+            />
           </dl>
 
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-              <h2 className="text-[13px] font-medium">Son 12 ay</h2>
-              <Segmented label="Metrik" value={metric} onChange={setMetric} options={METRICS.map((m) => ({ value: m, label: METRIC_LABEL[m] }))} />
+              <h2 className="text-[13px] font-medium">{tx('Son 12 ay', 'Last 12 months')}</h2>
+              <Segmented label={tx('Metrik', 'Metric')} value={metric} onChange={setMetric} options={METRICS.map((m) => ({ value: m, label: metricLabel(m) }))} />
             </div>
             <div className="px-5 py-5">
-              {heat.data ? <Calendar data={heat.data} hint="Bu projedeki günlük etkinlik." /> : <Skeleton className="h-[170px] w-full" />}
+              {heat.data ? <Calendar data={heat.data} hint={tx('Bu projedeki günlük etkinlik.', 'Daily activity in this project.')} /> : <Skeleton className="h-[170px] w-full" />}
             </div>
           </Card>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Card>
-              <CardHeader title={data.series.bucket === 'week' ? 'Haftalık maliyet' : 'Günlük maliyet'} aside={RANGE_LOWER[range]} />
+              <CardHeader
+                title={data.series.bucket === 'week' ? tx('Haftalık maliyet', 'Weekly cost') : tx('Günlük maliyet', 'Daily cost')}
+                aside={rangeLower(range)}
+              />
               <div className="px-5 pb-4">
                 <DailyBars data={data.series.points} bucket={data.series.bucket} height={170} />
               </div>
@@ -143,9 +168,12 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Card>
-              <CardHeader title="En çok değişen dosyalar" aside={`${RANGE_LOWER[range]}, Edit, Write ve shell düzenlemeleri`} />
+              <CardHeader
+                title={tx('En çok değişen dosyalar', 'Most changed files')}
+                aside={tx(`${rangeLower(range)}, Edit, Write ve shell düzenlemeleri`, `${rangeLower(range)}, Edit, Write and shell edits`)}
+              />
               {data.files.length === 0 ? (
-                <p className="px-5 pb-5 text-ink-2">Bu dönemde kayıtlı dosya değişikliği yok.</p>
+                <p className="px-5 pb-5 text-ink-2">{tx('Bu dönemde kayıtlı dosya değişikliği yok.', 'No file changes recorded in this period.')}</p>
               ) : (
                 <div className="overflow-x-auto px-5 pb-4">
                   <table className="w-full min-w-[520px] table-fixed text-[13px]">
@@ -157,10 +185,10 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
                     </colgroup>
                     <thead>
                       <tr className="text-left text-[12px] text-ink-3">
-                        <th className="pb-2 font-normal">Dosya</th>
-                        <th className="pb-2 text-right font-normal">Düzenleme</th>
-                        <th className="pb-2 text-right font-normal">Satır</th>
-                        <th className="pb-2 text-right font-normal">Son</th>
+                        <th className="pb-2 font-normal">{tx('Dosya', 'File')}</th>
+                        <th className="pb-2 text-right font-normal">{tx('Düzenleme', 'Edits')}</th>
+                        <th className="pb-2 text-right font-normal">{tx('Satır', 'Lines')}</th>
+                        <th className="pb-2 text-right font-normal">{tx('Son', 'Last')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -171,7 +199,7 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
                           </td>
                           <td className="py-1.5 text-right font-mono text-[12px] num">
                             {f.edits}
-                            {f.sessions > 1 ? <span className="text-ink-3"> · {f.sessions} oturum</span> : null}
+                            {f.sessions > 1 ? <span className="text-ink-3">{tx(` · ${f.sessions} oturum`, ` · ${f.sessions} sessions`)}</span> : null}
                           </td>
                           <td className="py-1.5 text-right font-mono text-[12px] whitespace-nowrap num">
                             <span className="text-good">+{fmtInt(f.added)}</span> <span className="text-danger">−{fmtInt(f.removed)}</span>
@@ -187,20 +215,20 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
 
             <div className="space-y-6">
               <Card>
-                <CardHeader title="Araçlar" aside={`${RANGE_LOWER[range]}, en çok kullanılanlar`} />
+                <CardHeader title={tx('Araçlar', 'Tools')} aside={tx(`${rangeLower(range)}, en çok kullanılanlar`, `${rangeLower(range)}, most used`)} />
                 <div className="px-5 pb-5">
                   <HBars
                     format={fmtInt}
                     items={data.tools.map((t) => ({
                       label: t.name.startsWith('mcp__') ? t.name.split('__').slice(1).join(' › ') : t.name,
                       value: t.calls,
-                      note: t.errors ? `${t.errors} hata` : undefined,
+                      note: t.errors ? tx(`${t.errors} hata`, `${t.errors} ${t.errors === 1 ? 'error' : 'errors'}`) : undefined,
                     }))}
                   />
                 </div>
               </Card>
               <Card>
-                <CardHeader title="Modeller" aside={RANGE_LOWER[range]} />
+                <CardHeader title={tx('Modeller', 'Models')} aside={rangeLower(range)} />
                 <div className="px-5 pb-5">
                   <HBars format={fmtUsd} items={data.models.map((m) => ({ label: modelName(m.model), value: m.cost }))} />
                 </div>
@@ -212,9 +240,12 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
           <BranchCard branches={data.branches} range={range} />
 
           <Card>
-            <CardHeader title="Açılan PR'lar" aside={data.prs.length ? `${data.prs.length} PR` : null} />
+            <CardHeader
+              title={tx("Açılan PR'lar", 'PRs opened')}
+              aside={data.prs.length ? tx(`${data.prs.length} PR`, `${data.prs.length} ${data.prs.length === 1 ? 'PR' : 'PRs'}`) : null}
+            />
             {data.prs.length === 0 ? (
-              <p className="px-5 pb-5 text-ink-2">Bu dönemde açılmış bir PR kaydı yok.</p>
+              <p className="px-5 pb-5 text-ink-2">{tx('Bu dönemde açılmış bir PR kaydı yok.', 'No PRs opened in this period.')}</p>
             ) : (
               <ul className="px-5 pb-4">
                 {data.prs.map((pr) => (
@@ -242,7 +273,11 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
             onClick={(e) => onLinkClick(e, withRange(`/oturumlar?proje=${encodeURIComponent(data.key)}`, range))}
             className="inline-flex items-center gap-1.5 text-[14px] text-accent underline underline-offset-2"
           >
-            Bu projenin {RANGE_LOWER[range] === 'toplam' ? '' : `${RANGE_LOWER[range]} `}{fmtInt(range === 'all' ? data.sessions : data.rangeSessions)} oturumu <ArrowRight className="size-4" aria-hidden />
+            {tx(
+              `Bu projenin ${range === 'all' ? '' : `${rangeLower(range)} `}${fmtInt(range === 'all' ? data.sessions : data.rangeSessions)} oturumu`,
+              `This project's ${fmtCount(range === 'all' ? data.sessions : data.rangeSessions, 'oturum', 'session')}${range === 'week' ? ' this week' : range === '30d' ? ' in the last 30 days' : ''}`,
+            )}{' '}
+            <ArrowRight className="size-4" aria-hidden />
           </a>
         </div>
       ) : null}
@@ -278,27 +313,27 @@ const LANGUAGE_COLORS = ['var(--cat-1)', 'var(--cat-3)', 'var(--cat-2)', 'var(--
 
 /** Changed lines by language; the five largest by name, the rest together. */
 function LanguageCard({ languages, range }: { languages: ProjectDetail['languages']; range: RangeKey }) {
-  const named = languages.filter((l) => l.name !== 'Diğer').slice(0, 5)
+  const named = languages.filter((l) => l.name !== 'Other').slice(0, 5)
   const rest = languages.filter((l) => !named.includes(l))
   const parts = [
-    ...named.map((l, i) => ({ label: l.name, value: l.lines, color: LANGUAGE_COLORS[i] ?? 'var(--ink-3)', detail: `${fmtInt(l.files)} dosya` })),
+    ...named.map((l, i) => ({ label: languageLabel(l.name), value: l.lines, color: LANGUAGE_COLORS[i] ?? 'var(--ink-3)', detail: fmtCount(l.files, 'dosya', 'file') })),
     ...(rest.length
       ? [{
-          label: 'Diğer',
+          label: languageLabel('Other'),
           value: rest.reduce((s, l) => s + l.lines, 0),
           color: 'var(--line-strong)',
-          detail: `${fmtInt(rest.reduce((s, l) => s + l.files, 0))} dosya`,
+          detail: fmtCount(rest.reduce((s, l) => s + l.files, 0), 'dosya', 'file'),
         }]
       : []),
   ]
   return (
     <Card>
-      <CardHeader title="Diller" aside={`${RANGE_LOWER[range]}, değişen satıra göre`} />
+      <CardHeader title={tx('Diller', 'Languages')} aside={tx(`${rangeLower(range)}, değişen satıra göre`, `${rangeLower(range)}, by lines changed`)} />
       <div className="px-5 pb-5">
         {parts.some((p) => p.value > 0) ? (
           <ShareBar parts={parts} format={fmtInt} />
         ) : (
-          <p className="text-ink-2">Bu dönemde kayıtlı dosya değişikliği yok.</p>
+          <p className="text-ink-2">{tx('Bu dönemde kayıtlı dosya değişikliği yok.', 'No file changes recorded in this period.')}</p>
         )}
       </div>
     </Card>
@@ -308,14 +343,17 @@ function LanguageCard({ languages, range }: { languages: ProjectDetail['language
 /** Subagents, skills and MCP servers this project leaned on. */
 function HelperCard({ data, range }: { data: ProjectDetail; range: RangeKey }) {
   const groups: { title: string; items: { name: string; calls: number }[] }[] = [
-    { title: "Subagent'lar", items: data.agents },
-    { title: "Skill'ler", items: data.skills },
-    { title: 'MCP sunucuları', items: data.mcp.map((m) => ({ ...m, name: mcpServerLabel(m.name) })) },
+    { title: tx("Subagent'lar", 'Subagents'), items: data.agents },
+    { title: tx("Skill'ler", 'Skills'), items: data.skills },
+    { title: tx('MCP sunucuları', 'MCP servers'), items: data.mcp.map((m) => ({ ...m, name: mcpServerLabel(m.name) })) },
   ].filter((g) => g.items.length > 0)
   if (groups.length === 0) return null
   return (
     <Card>
-      <CardHeader title="Subagent, skill ve MCP" aside={data.subagentCost > 0 ? `subagent'lar ${fmtUsd(data.subagentCost)}` : RANGE_LOWER[range]} />
+      <CardHeader
+        title={tx('Subagent, skill ve MCP', 'Subagents, skills and MCP')}
+        aside={data.subagentCost > 0 ? tx(`subagent'lar ${fmtUsd(data.subagentCost)}`, `subagent cost ${fmtUsd(data.subagentCost)}`) : rangeLower(range)}
+      />
       <div className="space-y-3 px-5 pb-4">
         {groups.map((g) => (
           <div key={g.title}>
@@ -339,7 +377,10 @@ function BranchCard({ branches, range }: { branches: ProjectDetail['branches']; 
   if (branches.length === 0) return null
   return (
     <Card>
-      <CardHeader title="Branch'ler" aside={`${RANGE_LOWER[range]}, oturumun çalıştığı branch`} />
+      <CardHeader
+        title={tx("Branch'ler", 'Branches')}
+        aside={tx(`${rangeLower(range)}, oturumun çalıştığı branch`, `${rangeLower(range)}, the branch each session ran on`)}
+      />
       <div className="overflow-x-auto px-5 pb-4">
         <table className="w-full min-w-[520px] table-fixed text-[13px]">
           <colgroup>
@@ -352,10 +393,10 @@ function BranchCard({ branches, range }: { branches: ProjectDetail['branches']; 
           <thead>
             <tr className="text-left text-[12px] text-ink-3">
               <th className="pb-2 font-normal">Branch</th>
-              <th className="pb-2 text-right font-normal">Oturum</th>
-              <th className="pb-2 text-right font-normal">Mesaj</th>
-              <th className="pb-2 text-right font-normal">Maliyet</th>
-              <th className="pb-2 text-right font-normal">Son</th>
+              <th className="pb-2 text-right font-normal">{tx('Oturum', 'Sessions')}</th>
+              <th className="pb-2 text-right font-normal">{tx('Mesaj', 'Messages')}</th>
+              <th className="pb-2 text-right font-normal">{tx('Maliyet', 'Cost')}</th>
+              <th className="pb-2 text-right font-normal">{tx('Son', 'Last')}</th>
             </tr>
           </thead>
           <tbody>
@@ -365,7 +406,7 @@ function BranchCard({ branches, range }: { branches: ProjectDetail['branches']; 
                   <span className="flex min-w-0 items-center gap-1.5 font-mono text-[12px]" title={b.name ?? undefined}>
                     <GitBranch className="size-3.5 shrink-0 text-ink-3" aria-hidden />
                     {b.name === null ? (
-                      <span className="text-ink-3">git repo'su değil</span>
+                      <span className="text-ink-3">{tx("git repo'su değil", 'not a git repo')}</span>
                     ) : b.name === 'HEAD' ? (
                       <span className="text-ink-3">detached HEAD</span>
                     ) : (

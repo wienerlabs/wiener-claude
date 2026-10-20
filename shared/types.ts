@@ -435,8 +435,9 @@ export interface MemoryFile {
 
 export interface InstructionFile {
   id: string
-  /** "Kullanıcı" for ~/.claude/CLAUDE.md, otherwise the project's name. */
+  /** "Kullanıcı" ("User") for ~/.claude/CLAUDE.md, otherwise the project's name. */
   scope: string
+  scopeKind: 'user' | 'project'
   file: string
   mtime: number
   size: number
@@ -474,7 +475,7 @@ export interface PlanItem {
 export interface SkillItem {
   name: string
   description: string | null
-  /** Where it comes from: a plugin name, "Kullanıcı", a project, or "Claude Code". */
+  /** Where it comes from: a plugin name, "Kullanıcı" ("User"), a project, or "Claude Code". */
   source: string
   uses: number
   lastUsedAt: number | null
@@ -491,8 +492,9 @@ export interface PluginItem {
 
 export interface McpServer {
   name: string
-  /** Where it is configured: "Kullanıcı", "Proje: …", "claude.ai connector", "Desktop uygulaması", or "Yapılandırma bulunamadı". */
+  /** Where it is configured, in the interface language: "Kullanıcı", "Proje: …", "claude.ai connector", "Desktop uygulaması", "Plugin" or "Yapılandırma bulunamadı". */
   scope: string
+  scopeKind: 'user' | 'project' | 'connector' | 'desktop' | 'plugin' | 'unconfigured'
   transport: 'stdio' | 'http' | 'sse' | null
   /** Program name for stdio servers, host for remote ones. Never arguments, headers or env. */
   target: string | null

@@ -1,4 +1,5 @@
 // Saves an on-page SVG as a PNG. Everything happens in the browser; nothing leaves the machine.
+import { tx } from './i18n.ts'
 
 /** Theme colors are CSS variables; an SVG drawn as an image can't see them, so they are written in. */
 function resolveVars(svg: string): string {
@@ -84,11 +85,11 @@ export async function svgToPng(svg: SVGSVGElement, opts: PngOptions): Promise<Bl
   canvas.width = opts.width * scale
   canvas.height = opts.height * scale
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Tarayıcı resmi oluşturamadı')
+  if (!ctx) throw new Error(tx('Tarayıcı resmi oluşturamadı', "The browser couldn't create the image"))
   ctx.scale(scale, scale)
   ctx.drawImage(img, 0, 0, opts.width, opts.height)
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  if (!blob) throw new Error('Tarayıcı resmi oluşturamadı')
+  if (!blob) throw new Error(tx('Tarayıcı resmi oluşturamadı', "The browser couldn't create the image"))
   return blob
 }
 

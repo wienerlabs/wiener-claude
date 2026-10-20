@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { type Lang, formatInt, pick } from '../shared/i18n.ts'
 import type { ReplayItem, ReplayTurn } from '../shared/types.ts'
 import { readLinesFrom } from './jsonl.ts'
 import { cleanPrompt, isHumanPrompt, parseTs, promptKind, userText } from './parse.ts'
@@ -12,8 +13,10 @@ const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v)
 const MAX_TOOL_TEXT = 1500
 const MAX_TEXT = 30_000
 
-function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}\n… (${(text.length - max).toLocaleString('tr-TR')} karakter daha)` : text
+function clip(text: string, max: number, lang: Lang): string {
+  if (text.length <= max) return text
+  const more = formatInt(text.length - max, lang)
+  return `${text.slice(0, max)}\n… ${pick(lang, `(${more} karakter daha)`, `(${more} more characters)`)}`
 }
 
 function shortPath(p: string, cwd: string | null): string {
@@ -22,7 +25,7 @@ function shortPath(p: string, cwd: string | null): string {
 }
 
 /** One line that says what a tool call did: the command, the file, the query. */
-export function toolSummary(name: string, input: Json | null, cwd: string | null): string {
+export function toolSummary(name: string, input: Json | null, cwd: string | null, lang: Lang = 'tr'): string {
   const i = input ?? {}
   const s = (k: string) => str(i[k])
   const firstLine = (t: string) => t.split('\n')[0]?.slice(0, 200) ?? ''
@@ -47,7 +50,7 @@ export function toolSummary(name: string, input: Json | null, cwd: string | null
     case 'Agent':
       return s('description') ?? firstLine(s('prompt') ?? '')
     case 'TodoWrite':
-      return Array.isArray(i.todos) ? `${i.todos.length} görev` : ''
+      return Array.isArray(i.todos) ? pick(lang, `${i.todos.length} görev`, `${i.todos.length} ${i.todos.length === 1 ? 'task' : 'tasks'}`) : ''
     case 'Skill':
       return s('skill') ?? s('command') ?? ''
   }
@@ -55,14 +58,14 @@ export function toolSummary(name: string, input: Json | null, cwd: string | null
   return firstString ? firstLine(firstString) : ''
 }
 
-function resultText(content: unknown): string {
+function resultText(content: unknown, lang: Lang): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return content
     .map((b) => {
       const block = obj(b)
       if (block?.type === 'text') return str(block.text) ?? ''
-      if (block?.type === 'image') return '[görsel]'
+      if (block?.type === 'image') return pick(lang, '[görsel]', '[image]')
       return ''
     })
     .filter(Boolean)
@@ -83,7 +86,7 @@ export interface BuiltTurns {
   keyIndex: Map<string, number>
 }
 
-export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish: () => BuiltTurns } {
+export function turnBuilder(pricing: Pricing, lang: Lang = 'tr'): { add: (o: Json) => void; finish: () => BuiltTurns } {
   const turns: Building[] = []
   const keyIndex = new Map<string, number>()
   const tools = new Map<string, Extract<ReplayItem, { type: 'tool' }>>()
@@ -116,26 +119,26 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
         if (!item) continue
         const isError = r.is_error === true
         const denied = str(o.toolDenialKind)
-        item.result = { text: clip(resultText(r.content), MAX_TOOL_TEXT), isError, denied, ts }
+        item.result = { text: clip(resultText(r.content, lang), MAX_TOOL_TEXT, lang), isError, denied, ts }
         if (isError && !denied && current) current.errors++
       }
       if (toolResults.length > 0 || o.isMeta || o.isCompactSummary) return
       const trimmed = text.trimStart()
       if (trimmed.startsWith('[Request interrupted')) {
-        ensure(ts).items.push({ type: 'notice', ts, tone: 'neutral', text: 'Kullanıcı yanıtı yarıda kesti.' })
+        ensure(ts).items.push({ type: 'notice', ts, tone: 'neutral', text: pick(lang, 'Kullanıcı yanıtı yarıda kesti.', 'You interrupted the response.') })
       } else if (isHumanPrompt(o, text)) {
         current = {
           index: turns.length, ts,
-          prompt: { text: clip(cleanPrompt(text), MAX_TEXT), kind: promptKind(text), images, key: str(o.uuid) ?? '' },
+          prompt: { text: clip(cleanPrompt(text), MAX_TEXT, lang), kind: promptKind(text), images, key: str(o.uuid) ?? '' },
           items: [], cost: 0, outputTokens: 0, toolCalls: 0, errors: 0, usage: new Map(),
         }
         turns.push(current)
       } else {
         const kind = obj(o.origin)?.kind
         if (kind === 'task-notification' || trimmed.startsWith('<task-notification')) {
-          ensure(ts).items.push({ type: 'notice', ts, tone: 'neutral', text: 'Arka plandaki bir görevden bildirim geldi.' })
+          ensure(ts).items.push({ type: 'notice', ts, tone: 'neutral', text: pick(lang, 'Arka plandaki bir görevden bildirim geldi.', 'A background task sent a notification.') })
         } else if (kind === 'peer') {
-          ensure(ts).items.push({ type: 'notice', ts, tone: 'neutral', text: 'Başka bir oturumdan mesaj geldi.' })
+          ensure(ts).items.push({ type: 'notice', ts, tone: 'neutral', text: pick(lang, 'Başka bir oturumdan mesaj geldi.', 'A message came in from another session.') })
         }
       }
       return
@@ -144,8 +147,8 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
     if (o.type === 'assistant' && m) {
       const turn = ensure(ts)
       if (o.isApiErrorMessage) {
-        const text = Array.isArray(m.content) ? resultText(m.content) : ''
-        turn.items.push({ type: 'notice', ts, tone: 'error', text: text || 'API hatası' })
+        const text = Array.isArray(m.content) ? resultText(m.content, lang) : ''
+        turn.items.push({ type: 'notice', ts, tone: 'error', text: text || pick(lang, 'API hatası', 'API error') })
         turn.errors++
         return
       }
@@ -185,10 +188,10 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
         if (block.type === 'text') {
           const text = str(block.text)?.trim()
           // Same key the search index uses for this block.
-          if (text) turn.items.push({ type: 'text', ts, text: clip(text, MAX_TEXT), key: `${str(o.uuid) ?? ''}:${i}` })
+          if (text) turn.items.push({ type: 'text', ts, text: clip(text, MAX_TEXT, lang), key: `${str(o.uuid) ?? ''}:${i}` })
         } else if (block.type === 'thinking') {
           const text = str(block.thinking)?.trim()
-          if (text) turn.items.push({ type: 'thinking', ts, text: clip(text, MAX_TEXT), durationMs: num(o.thinkingDurationMs) || null })
+          if (text) turn.items.push({ type: 'thinking', ts, text: clip(text, MAX_TEXT, lang), durationMs: num(o.thinkingDurationMs) || null })
         } else if (block.type === 'tool_use') {
           const id = str(block.id)
           const name = str(block.name)
@@ -196,8 +199,8 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
           const input = obj(block.input)
           const item: Extract<ReplayItem, { type: 'tool' }> = {
             type: 'tool', id, name, ts,
-            summary: toolSummary(name, input, cwd),
-            input: clip(JSON.stringify(input ?? {}, null, 2), MAX_TOOL_TEXT),
+            summary: toolSummary(name, input, cwd, lang),
+            input: clip(JSON.stringify(input ?? {}, null, 2), MAX_TOOL_TEXT, lang),
             result: null,
           }
           tools.set(id, item)
@@ -235,8 +238,8 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
   return { add, finish }
 }
 
-export function buildTurns(records: Json[], pricing: Pricing): ReplayTurn[] {
-  const b = turnBuilder(pricing)
+export function buildTurns(records: Json[], pricing: Pricing, lang: Lang = 'tr'): ReplayTurn[] {
+  const b = turnBuilder(pricing, lang)
   for (const o of records) b.add(o)
   return b.finish().turns
 }
@@ -244,17 +247,17 @@ export function buildTurns(records: Json[], pricing: Pricing): ReplayTurn[] {
 const cache = new Map<string, BuiltTurns>()
 const CACHE_SIZE = 3
 
-/** Turns of a transcript file, cached by path, size and modification time. */
-export async function turnsOf(file: string, pricing: Pricing): Promise<BuiltTurns> {
+/** Turns of a transcript file, cached by path, size, modification time and language. */
+export async function turnsOf(file: string, pricing: Pricing, lang: Lang = 'tr'): Promise<BuiltTurns> {
   const st = await fs.stat(file)
-  const key = `${file}:${st.size}:${st.mtimeMs}:${pricing.version}`
+  const key = `${file}:${st.size}:${st.mtimeMs}:${pricing.version}:${lang}`
   const hit = cache.get(key)
   if (hit) {
     cache.delete(key)
     cache.set(key, hit)
     return hit
   }
-  const builder = turnBuilder(pricing)
+  const builder = turnBuilder(pricing, lang)
   await readLinesFrom(file, 0, (line) => {
     try {
       const o = JSON.parse(line) as unknown
@@ -264,7 +267,7 @@ export async function turnsOf(file: string, pricing: Pricing): Promise<BuiltTurn
     }
   })
   const built = builder.finish()
-  for (const k of cache.keys()) if (k.startsWith(`${file}:`)) cache.delete(k)
+  for (const k of cache.keys()) if (k.startsWith(`${file}:`) && !k.startsWith(`${file}:${st.size}:${st.mtimeMs}:`)) cache.delete(k)
   cache.set(key, built)
   while (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value as string)
   return built

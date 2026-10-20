@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { tx } from '../lib/i18n.ts'
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ')
@@ -62,12 +63,12 @@ export function Skeleton({ className }: { className?: string }) {
 export function Delta({ now, before, invert = false }: { now: number; before: number; invert?: boolean }) {
   if (before <= 0) return null
   const pct = Math.round(((now - before) / before) * 100)
-  if (pct === 0) return <span className="text-ink-3">aynı</span>
+  if (pct === 0) return <span className="text-ink-3">{tx('aynı', 'no change')}</span>
   const up = pct > 0
   const good = invert ? !up : up
   return (
     <span className={cx('num', good ? 'text-good' : 'text-ink-2')}>
-      {up ? '+' : '−'}%{Math.abs(pct)}
+      {up ? '+' : '−'}{tx(`%${Math.abs(pct)}`, `${Math.abs(pct)}%`)}
     </span>
   )
 }

@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import type { ProjectOption, SessionList, SessionRow, SessionSource } from '../../../shared/types.ts'
 import { ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
-import { fmtDuration, fmtInt, fmtRelative, fmtUsd } from '../lib/format.ts'
+import { fmtCount, fmtDuration, fmtRelative, fmtUsd } from '../lib/format.ts'
+import { tx } from '../lib/i18n.ts'
 import { RangePicker, useRange } from '../lib/range.tsx'
 import { navigate, onLinkClick, useLocation } from '../lib/router.ts'
 import { Replay } from './Replay.tsx'
@@ -52,46 +53,47 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
     if (s.match) next.set('mesaj', s.match.key)
     return `/oturumlar/${s.id}${next.size ? `?${next}` : ''}`
   }
+  const more = list.data ? Math.min(PAGE, list.data.total - list.data.rows.length) : 0
 
   return (
     <div className="mx-auto grid max-w-[1400px] gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
       <section
-        aria-label="Oturum listesi"
+        aria-label={tx('Oturum listesi', 'Session list')}
         className={cx(
           'min-w-0 space-y-3 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:self-start lg:overflow-y-auto lg:pr-1',
           selectedId && 'hidden lg:block',
         )}
       >
-        <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">Oturumlar</h1>
+        <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">{tx('Oturumlar', 'Sessions')}</h1>
         <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 focus-within:border-accent">
           <Search className="size-4 text-ink-3" aria-hidden />
-          <span className="sr-only">Oturumlarda ara</span>
+          <span className="sr-only">{tx('Oturumlarda ara', 'Search sessions')}</span>
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Başlıkta ya da konuşmalarda ara"
+            placeholder={tx('Başlıkta ya da konuşmalarda ara', 'Search titles and conversations')}
             className="h-9 w-full bg-transparent text-[14px] outline-none placeholder:text-ink-3"
           />
         </label>
         <RangePicker value={range} onChange={setRange} />
         <div className="flex flex-wrap items-center gap-2">
           <Segmented<'all' | SessionSource>
-            label="Kaynak"
+            label={tx('Kaynak', 'Source')}
             value={source ?? 'all'}
             onChange={(v) => setQuery({ kaynak: v === 'all' ? null : v })}
             options={[
-              { value: 'all', label: 'Tümü' },
+              { value: 'all', label: tx('Tümü', 'All') },
               { value: 'desktop', label: 'Desktop' },
               { value: 'cli', label: 'CLI' },
             ]}
           />
           <select
-            aria-label="Proje"
+            aria-label={tx('Proje', 'Project')}
             value={project ?? ''}
             onChange={(e) => setQuery({ proje: e.target.value || null })}
             className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink-2"
           >
-            <option value="">Bütün projeler</option>
+            <option value="">{tx('Bütün projeler', 'All projects')}</option>
             {projects.data?.map((p) => (
               <option key={p.key} value={p.key}>
                 {p.name} ({p.sessions})
@@ -106,10 +108,15 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
         ) : null}
         {list.data ? (
           <>
-            <p className="text-[12px] text-ink-3 num">{fmtInt(list.data.total)} oturum</p>
+            <p className="text-[12px] text-ink-3 num">{fmtCount(list.data.total, 'oturum', 'session')}</p>
             {list.data.rows.length === 0 ? (
               <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[13px] text-ink-2">
-                {q ? `"${q}" için ${range === 'all' ? '' : 'bu dönemde '}oturum bulunamadı. Başka bir kelime dene.` : 'Bu filtrelerle eşleşen oturum yok.'}
+                {q
+                  ? tx(
+                      `"${q}" için ${range === 'all' ? '' : 'bu dönemde '}oturum bulunamadı. Başka bir kelime dene.`,
+                      `No sessions found for "${q}"${range === 'all' ? '' : ' in this period'}. Try another word.`,
+                    )
+                  : tx('Bu filtrelerle eşleşen oturum yok.', 'No sessions match these filters.')}
               </p>
             ) : (
               <ul className={cx('overflow-hidden rounded-xl border border-line bg-surface transition-opacity', list.stale && 'opacity-60')} aria-busy={list.stale}>
@@ -124,14 +131,14 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
                 onClick={() => setLimit((l) => l + PAGE)}
                 className="w-full rounded-lg border border-line bg-surface py-2 text-[13px] text-ink-2 hover:text-ink"
               >
-                {Math.min(PAGE, list.data.total - list.data.rows.length)} oturum daha göster
+                {tx(`${more} oturum daha göster`, `Show ${more} more ${more === 1 ? 'session' : 'sessions'}`)}
               </button>
             ) : null}
           </>
         ) : null}
       </section>
 
-      <section aria-label="Oturum dökümü" className={cx('min-w-0', !selectedId && 'hidden lg:block')}>
+      <section aria-label={tx('Oturum dökümü', 'Session transcript')} className={cx('min-w-0', !selectedId && 'hidden lg:block')}>
         {selectedId ? (
           <>
             <a
@@ -139,15 +146,20 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
               onClick={(e) => onLinkClick(e, `/oturumlar${keep}`)}
               className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink lg:hidden"
             >
-              <ArrowLeft className="size-4" aria-hidden /> Bütün oturumlar
+              <ArrowLeft className="size-4" aria-hidden /> {tx('Bütün oturumlar', 'All sessions')}
             </a>
             <Replay id={selectedId} focusKey={query.get('mesaj')} />
           </>
         ) : (
           <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-dashed border-line text-center">
             <div className="max-w-[36ch] space-y-1 px-6">
-              <p className="font-medium">Bir oturum seç</p>
-              <p className="text-[13px] text-ink-2">Soldan bir oturum seçince prompt'lar, Claude'un yanıtları ve araç çağrıları sırasıyla burada görünür.</p>
+              <p className="font-medium">{tx('Bir oturum seç', 'Select a session')}</p>
+              <p className="text-[13px] text-ink-2">
+                {tx(
+                  "Soldan bir oturum seçince prompt'lar, Claude'un yanıtları ve araç çağrıları sırasıyla burada görünür.",
+                  "Select a session on the left to see its prompts, Claude's replies and tool calls here, in order.",
+                )}
+              </p>
             </div>
           </div>
         )}
@@ -171,19 +183,19 @@ function SessionItem({ s, active, href }: { s: SessionRow; active: boolean; href
           <span aria-hidden>·</span>
           <span>{fmtRelative(s.lastTs)}</span>
           {s.prUrl ? (
-            <span className="inline-flex items-center gap-0.5" title="Bu oturumda PR açıldı">
+            <span className="inline-flex items-center gap-0.5" title={tx('Bu oturumda PR açıldı', 'A PR was opened in this session')}>
               <GitPullRequest className="size-3" aria-hidden />
               {s.prNumber ? `#${s.prNumber}` : 'PR'}
             </span>
           ) : null}
         </span>
         <span className="mt-1 block font-mono text-[12px] text-ink-2 num">
-          {fmtInt(s.messages)} mesaj · {fmtUsd(s.costEstimate)} · {fmtDuration(s.activeMs)}
-          {s.toolErrors > 0 ? <span className="text-danger"> · {s.toolErrors} hata</span> : null}
+          {fmtCount(s.messages, 'mesaj', 'message')} · {fmtUsd(s.costEstimate)} · {fmtDuration(s.activeMs)}
+          {s.toolErrors > 0 ? <span className="text-danger"> · {fmtCount(s.toolErrors, 'hata', 'error')}</span> : null}
         </span>
         {s.match ? (
           <span className="mt-2 block rounded-md bg-raised px-2.5 py-1.5 text-[12px] leading-relaxed text-ink-2">
-            <span className="mr-1.5 text-ink-3">{MATCH_KIND[s.match.kind]}{s.match.hits > 1 ? ` · ${s.match.hits} yerde` : ''}:</span>
+            <span className="mr-1.5 text-ink-3">{matchKind()[s.match.kind]}{s.match.hits > 1 ? tx(` · ${s.match.hits} yerde`, ` · ${s.match.hits} matches`) : ''}:</span>
             <Snippet text={s.match.snippet} />
           </span>
         ) : null}
@@ -192,11 +204,11 @@ function SessionItem({ s, active, href }: { s: SessionRow; active: boolean; href
   )
 }
 
-const MATCH_KIND: Record<NonNullable<SessionRow['match']>['kind'], string> = {
-  prompt: 'İstemde',
-  reply: 'Yanıtta',
-  command: 'Komutta',
-}
+const matchKind = (): Record<NonNullable<SessionRow['match']>['kind'], string> => ({
+  prompt: tx('İstemde', 'In a prompt'),
+  reply: tx('Yanıtta', 'In a reply'),
+  command: tx('Komutta', 'In a command'),
+})
 
 /** Renders \u0002…\u0003 hit markers as <mark>; the text itself is never parsed as HTML. */
 function Snippet({ text }: { text: string }) {

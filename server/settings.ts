@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { type Lang, pick } from '../shared/i18n.ts'
 import type { Settings } from '../shared/types.ts'
 import { dataDir } from './paths.ts'
 
@@ -24,18 +25,18 @@ function validBudget(v: unknown): number | null {
 export class SettingsError extends Error {}
 
 /** Applies a partial update; anything other than known keys with valid values is refused. */
-export function updateSettings(patch: unknown): Settings {
-  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new SettingsError('Ayarlar bir nesne olmalı')
+export function updateSettings(patch: unknown, lang: Lang = 'tr'): Settings {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new SettingsError(pick(lang, 'Ayarlar bir nesne olmalı', 'Settings must be an object'))
   const p = patch as Record<string, unknown>
   const next = readSettings()
   for (const key of Object.keys(p)) {
-    if (key !== 'monthlyBudget') throw new SettingsError(`Bilinmeyen ayar: ${key}`)
+    if (key !== 'monthlyBudget') throw new SettingsError(pick(lang, `Bilinmeyen ayar: ${key}`, `Unknown setting: ${key}`))
   }
   if ('monthlyBudget' in p) {
     if (p.monthlyBudget === null) next.monthlyBudget = null
     else {
       const budget = validBudget(p.monthlyBudget)
-      if (budget === null) throw new SettingsError('Bütçe 0 ile 10.000.000 arasında bir sayı olmalı')
+      if (budget === null) throw new SettingsError(pick(lang, 'Bütçe 0 ile 10.000.000 arasında bir sayı olmalı', 'The budget must be a number between 0 and 10,000,000'))
       next.monthlyBudget = budget
     }
   }

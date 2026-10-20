@@ -29,6 +29,7 @@ Claude Code, her oturumu bilgisayarındaki `~/.claude` klasörüne yazar. Wiener
 - **Doğru sayılar.** Claude Code bir yanıtı birden fazla satıra yazar; her yanıt bir kez sayılır. Fiyatlar Claude Code'un kendi `costUSD` değerleriyle doğrulanmıştır.
 - **Kanıta dayalı öneriler.** Her ipucu dayandığı oturumları gösterir; tahmini kazancı ve gerekiyorsa kopyalanabilir bir `CLAUDE.md` satırını verir.
 - **Tamamen yerel.** Sunucu varsayılan olarak yalnızca `127.0.0.1`'de dinler, `~/.claude` içine hiçbir şey yazmaz, gizli değerleri hiç göstermez.
+- **Türkçe ve İngilizce.** Arayüz tarayıcının diliyle açılır; menüdeki TR/EN anahtarıyla istediğin an değişir. Canlı demonun da İngilizce bir veri seti var.
 
 Wiener Tools for Claude Code, [Wiener Labs](https://wienerlabs.xyz)'in araç ailesi [Wiener Tools](https://tools.wienerlabs.xyz)'a eklenen yeni bir araçtır.
 
@@ -103,6 +104,7 @@ Panel tarayıcıda kendiliğinden açılır. İlk indeksleme geçmişin büyükl
 | --- | --- | --- |
 | `--port <n>` | `4747` | Dinlenecek port; doluysa bir sonraki denenir |
 | `--host <h>` | `127.0.0.1` | `0.0.0.0` paneli yerel ağa açar |
+| `--lang <dil>` | tarayıcının dili | Panelin dili: `tr` ya da `en` |
 | `--no-open` | | Tarayıcıyı açma |
 | `-v`, `--version` | | Sürümü göster |
 
@@ -111,6 +113,7 @@ Panel tarayıcıda kendiliğinden açılır. İlk indeksleme geçmişin büyükl
 | `CLAUDE_CONFIG_DIR` | Başka bir Claude profili: `CLAUDE_CONFIG_DIR=~/.claude-work npx wiener-tools-claude` |
 | `WIENER_DATA_DIR` | İndeksin ve ayarların tutulduğu klasör (varsayılan `~/.wiener-tools/claude`) |
 | `WIENER_PORT` | Varsayılan port |
+| `WIENER_LANG` | Terminal çıktısının dili (`tr` ya da `en`); verilmezse sistemin dili |
 
 Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok başına dolar):
 
@@ -211,7 +214,7 @@ test/      Vitest testleri ve sentetik transcript kayıtları
 
 **Wiener Tools for Claude Code** is a local dashboard for your Claude Code usage. It reads the files Claude Code writes to `~/.claude` and turns them into activity heatmaps, session replays with full-text search, cost and limit tracking, tool and MCP usage, per-project trends, a shareable year-in-review card and evidence-based tips (context bloat, cache rewrites, repeated prompts, setup errors and more), each backed by the sessions it comes from. It is the newest addition to [Wiener Tools](https://tools.wienerlabs.xyz), the tool family from [Wiener Labs](https://wienerlabs.xyz).
 
-Everything stays on your machine: the server listens on `127.0.0.1` only, never writes to `~/.claude`, sends nothing anywhere and never shows secret values. Run it with `npx wiener-tools-claude` (Node.js 22.13+), or try the [live demo](https://claude.wienerlabs.xyz) with made-up data. The interface is in Turkish for now.
+Everything stays on your machine: the server listens on `127.0.0.1` only, never writes to `~/.claude`, sends nothing anywhere and never shows secret values. Run it with `npx wiener-tools-claude` (Node.js 22.13+), or try the [live demo](https://claude.wienerlabs.xyz/?lang=en) with made-up data. The interface is in English and Turkish: it follows your browser's language, and the TR/EN switch in the menu changes it at any time (`--lang en` opens it in English).
 
 ## Lisans
 

@@ -1,13 +1,15 @@
 import { ArrowUpRight, Lightbulb } from 'lucide-react'
 import type { RangeKey, Tip } from '../../../shared/types.ts'
 import { fmtUsd } from '../lib/format.ts'
+import { tx } from '../lib/i18n.ts'
 import { rangeHref } from '../lib/range.tsx'
 import { onLinkClick } from '../lib/router.ts'
 
-/** "en fazla $1.985", "yaklaşık $490" */
+/** "en fazla $1.985", "yaklaşık $490"; "up to $1,985", "about $490" */
 export function savingText(tip: Tip): string | null {
   if (tip.saving === null || tip.saving < 0.01) return null
-  return `${tip.savingKind === 'upTo' ? 'en fazla' : 'yaklaşık'} ${fmtUsd(tip.saving)}`
+  const amount = fmtUsd(tip.saving)
+  return tip.savingKind === 'upTo' ? tx(`en fazla ${amount}`, `up to ${amount}`) : tx(`yaklaşık ${amount}`, `about ${amount}`)
 }
 
 /** A short list of tips, each opening the İpuçları page at its card. */

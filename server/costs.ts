@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { CostMix, CostReport, DailyCost, LimitHit, Limits, ModelCost, RangeKey } from '../shared/types.ts'
-import { withPossessive } from '../shared/tr.ts'
+import { type Lang, formatUsd, pick } from '../shared/i18n.ts'
 import type { Db } from './db.ts'
 import { type Pricing, normalizeModel } from './pricing.ts'
 import { WEEKLY_AFTER_DAYS, previousBounds, rangeBounds } from './range.ts'
@@ -10,9 +10,8 @@ import { addDays, dayKey, today, weekStart } from './time.ts'
 
 type Row = Record<string, unknown>
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
-const usd = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-const usd2 = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-export const money = (v: number) => (Math.abs(v) >= 100 ? usd.format(v) : usd2.format(v))
+/** "$6,92" in Turkish, "$6.92" in English; whole dollars from $100 up. */
+export const money = (v: number, lang: Lang) => formatUsd(v, lang, 100)
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -184,10 +183,16 @@ function mixOf(rows: UsageSums[], pricing: Pricing): CostMix {
   return mix
 }
 
-export const PERIOD: Record<RangeKey, { lead: string; inline: string }> = {
-  week: { lead: 'Bu hafta', inline: 'bu hafta' },
-  '30d': { lead: 'Son 30 günde', inline: 'son 30 günde' },
-  all: { lead: 'Şimdiye kadar', inline: 'şimdiye kadar' },
+/** The range at the start of a sentence (`lead`) and inside one (`inline`). */
+export function period(key: RangeKey, lang: Lang): { lead: string; inline: string } {
+  switch (key) {
+    case 'week':
+      return pick(lang, { lead: 'Bu hafta', inline: 'bu hafta' }, { lead: 'This week', inline: 'this week' })
+    case '30d':
+      return pick(lang, { lead: 'Son 30 günde', inline: 'son 30 günde' }, { lead: 'In the last 30 days', inline: 'in the last 30 days' })
+    case 'all':
+      return pick(lang, { lead: 'Şimdiye kadar', inline: 'şimdiye kadar' }, { lead: 'So far', inline: 'so far' })
+  }
 }
 
 /**
