@@ -1,15 +1,38 @@
 {
-  "name": "wiener-tools",
+  "name": "wiener-tools-claude",
   "version": "0.3.0",
-  "private": true,
-  "description": "Claude Code kullanımını yerelde gösteren sade bir panel: ısı haritaları, oturumlar, maliyet.",
+  "description": "Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel: ısı haritaları, oturumlar, arama, maliyet ve limitler. Yerel çalışır, veri göndermez.",
+  "license": "MIT",
+  "author": "Wiener Labs",
+  "homepage": "https://github.com/mehmethayirli/wiener-tools#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mehmethayirli/wiener-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mehmethayirli/wiener-tools/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "dashboard",
+    "analytics",
+    "heatmap",
+    "usage",
+    "cost",
+    "local-first",
+    "cli"
+  ],
   "type": "module",
   "bin": {
-    "wiener-tools": "bin/wiener.js"
+    "wiener-tools-claude": "bin/wiener.js"
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "engines": {
     "node": ">=22.13"
@@ -20,7 +43,8 @@
     "prepare": "npm run build",
     "start": "node bin/wiener.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

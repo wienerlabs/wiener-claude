@@ -1,6 +1,12 @@
-# Wiener Tools
+# Wiener Tools for Claude Code
+
+```bash
+npx wiener-tools-claude
+```
 
 Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.claude` klasörünü okur, hiçbir yere veri göndermez, hesap ya da API anahtarı istemez.
+
+> **English:** A local dashboard for your Claude Code usage: activity heatmaps, session replays, full-text search across every conversation, per-project file changes, cost and limits, and what Claude Code remembers about you. Everything stays on your machine. Run `npx wiener-tools-claude` (Node.js 22.13+). The interface is in Turkish for now.
 
 - **Isı haritaları:** bir yıllık takvim, haftanın günü × saat, proje × gün. Mesaj, token, maliyet, oturum ya da hata üzerinden.
 - **Gün dökümü:** takvimde bir güne tıklayınca o günün oturumları açılır.
@@ -17,15 +23,15 @@ Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.c
 
 Node.js 22.13 veya üstü gerekir (yerleşik SQLite için). Claude Code'u kullandığın bilgisayarda çalıştırılır; verini o makinedeki `~/.claude` klasöründen okur.
 
-**Repoya erişimi olanlar için tek komut:**
-
 ```bash
-npx github:mehmethayirli/wiener-tools
+npx wiener-tools-claude
 ```
 
-İlk seferde repo indirilir ve derlenir (bir dakika kadar). Panel tarayıcıda kendiliğinden açılır; ilk indeksleme geçmişin büyüklüğüne göre birkaç saniye ile yarım dakika arası sürer, ilerlemesi sol altta görünür. Sonraki açılışlarda yalnızca yeni kayıtlar okunur.
+Panel tarayıcıda kendiliğinden açılır. İlk indeksleme geçmişin büyüklüğüne göre birkaç saniye ile yarım dakika arası sürer, ilerlemesi sol altta görünür; sonraki açılışlarda yalnızca yeni kayıtlar okunur. Kapatmak için terminalde Ctrl+C.
 
-**Klonlayarak:**
+Seçenekler: `--port <n>` (varsayılan 4747, doluysa bir sonraki), `--host <h>` (varsayılan 127.0.0.1), `--no-open`. Başka bir Claude profili için `CLAUDE_CONFIG_DIR=~/.claude-work npx wiener-tools-claude`.
+
+Kaynaktan çalıştırmak için:
 
 ```bash
 git clone https://github.com/mehmethayirli/wiener-tools.git
@@ -34,9 +40,7 @@ npm install
 npm start
 ```
 
-`npm install` derlemeyi de yapar. Kapatmak için terminalde Ctrl+C.
-
-Seçenekler: `--port <n>` (varsayılan 4747, doluysa bir sonraki), `--host <h>` (varsayılan 127.0.0.1), `--no-open`. Başka bir Claude profili için `CLAUDE_CONFIG_DIR=~/.claude-work npm start`.
+`npm install` arayüzü ve sunucuyu derler.
 
 ## Geliştirme
 
@@ -59,12 +63,12 @@ npm run typecheck
 | `~/.claude/CLAUDE.md`, `<proje>/CLAUDE.md` | Talimatlar |
 | `~/.claude/settings.json`, `~/.claude/plugins/installed_plugins.json` | Ayarlar ve kurulu eklentiler |
 
-Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-tools/index.db`, bütçe ayarını `~/.wiener-tools/settings.json` dosyasında tutar. Bu dosya silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar o dökümlerden sonra da kalır.
+Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-tools/claude/index.db`, bütçe ayarını `~/.wiener-tools/claude/settings.json` dosyasında tutar. Bu dosya silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar o dökümlerden sonra da kalır.
 
 ## Sayılar nasıl hesaplanıyor
 
 - **Tekrarlar ayıklanır.** Claude Code tek bir API yanıtını içerik bloğu başına ayrı satırlara yazar; bu satırlar her zaman art arda gelmez ve sonrakiler daha büyük token sayısı taşıyabilir. Her yanıt `message.id` ile bir kez, en büyük değeriyle sayılır. Fork'lanan ya da devam ettirilen oturumlara kopyalanan geçmiş de bir kez sayılır.
-- **Maliyet liste fiyatıdır.** Fiyat tablosu `server/pricing.ts` içinde. 1 saatlik önbellek yazmaları girdinin 2 katı, 5 dakikalık olanlar 1,25 katı sayılır. Tablo, Claude Code'un kendi `costUSD` değerleriyle karşılaştırılarak doğrulandı. Tabloyu `~/.wiener-tools/pricing.json` ile ezebilirsin (MTok başına dolar):
+- **Maliyet liste fiyatıdır.** Fiyat tablosu `server/pricing.ts` içinde. 1 saatlik önbellek yazmaları girdinin 2 katı, 5 dakikalık olanlar 1,25 katı sayılır. Tablo, Claude Code'un kendi `costUSD` değerleriyle karşılaştırılarak doğrulandı. Tabloyu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok başına dolar):
 
   ```json
   { "claude-opus-5-5": { "input": 4, "output": 20, "cacheRead": 0.2 } }
@@ -89,3 +93,7 @@ Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-
 3. **Faz 3 (bu sürüm):** Ortam (memory, talimatlar, görevler ve planlar, skill'ler, eklentiler, MCP, ayarlar), bütçe, daha fazla içgörü.
 
 Desktop oturum klasörünün yolu yalnızca macOS'ta doğrulandı; Windows ve Linux yolları Electron varsayılanlarına göre tahmin ediliyor.
+
+## Lisans
+
+MIT © 2026 Wiener Labs. Ayrıntılar [LICENSE](LICENSE) dosyasında.

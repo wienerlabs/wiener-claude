@@ -121,7 +121,7 @@ export class Indexer {
         this.st.updateFile.run(w.size, w.mtimeMs, w.ino, offset, w.row.id)
         changed = true
       } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`wiener-tools: ${w.file.path} okunamadı:`, err)
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`wiener-tools-claude: ${w.file.path} okunamadı:`, err)
       }
       this.status.filesDone++
     }

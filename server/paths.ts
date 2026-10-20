@@ -31,7 +31,10 @@ export function desktopSessionsDir(): string | null {
   }
 }
 
-/** Where Wiener Tools keeps its own index and settings. Never inside ~/.claude. */
+/**
+ * Where this tool keeps its own index and settings. Never inside ~/.claude. Each Wiener Tools
+ * package gets its own folder under ~/.wiener-tools, so they never share files.
+ */
 export function dataDir(): string {
-  return process.env.WIENER_DATA_DIR ?? path.join(os.homedir(), '.wiener-tools')
+  return process.env.WIENER_DATA_DIR ?? path.join(os.homedir(), '.wiener-tools', 'claude')
 }

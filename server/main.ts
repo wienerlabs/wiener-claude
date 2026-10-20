@@ -11,9 +11,9 @@ import { dataDir, desktopSessionsDir, liveSessionsDir, projectsDir } from './pat
 import { Pricing } from './pricing.ts'
 
 const VERSION = '0.3.0'
-const HELP = `Wiener Tools ${VERSION}: Claude Code kullanımını yerelde gösterir.
+const HELP = `Wiener Tools for Claude Code ${VERSION}: Claude Code kullanımını yerelde gösterir.
 
-Kullanım: wiener-tools [seçenekler]
+Kullanım: wiener-tools-claude [seçenekler]
 
   --port <n>    Dinlenecek port (varsayılan 4747, doluysa bir sonraki)
   --host <h>    Bağlanılacak adres (varsayılan 127.0.0.1). 0.0.0.0 panelini yerel ağa açar.
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   })
 
   const url = `http://${lan ? 'localhost' : opts.host === '127.0.0.1' ? 'localhost' : opts.host}:${port}`
-  process.stdout.write(`\n  Wiener Tools  ${url}\n  Okunan klasör: ${projectsDir()}\n`)
+  process.stdout.write(`\n  Wiener Tools for Claude Code  ${url}\n  Okunan klasör: ${projectsDir()}\n  Kendi verisi:  ${dataDir()}\n`)
   if (lan) process.stdout.write('  Uyarı: panel yerel ağdaki herkese açık.\n')
   process.stdout.write('\n')
 
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
     if (timer) return
     timer = setTimeout(() => {
       timer = null
-      indexer.scan().then((changed) => changed && events.emit('update'), (err) => console.error('wiener-tools: tarama hatası', err))
+      indexer.scan().then((changed) => changed && events.emit('update'), (err) => console.error('wiener-tools-claude: tarama hatası', err))
     }, 750)
   }
   const started = Date.now()
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
       process.stdout.write(`  İndeks hazır: ${files} dosya, ${((Date.now() - started) / 1000).toFixed(1)} sn\n`)
       if (changed) events.emit('update')
     },
-    (err) => console.error('wiener-tools: ilk tarama başarısız', err),
+    (err) => console.error('wiener-tools-claude: ilk tarama başarısız', err),
   )
   watch(projectsDir(), rescan)
   watch(desktopSessionsDir(), rescan)
