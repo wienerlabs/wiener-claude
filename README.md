@@ -34,8 +34,8 @@ Seçenekler: `--port <n>` (varsayılan 4747, doluysa bir sonraki), `--host <h>` 
 Kaynaktan çalıştırmak için:
 
 ```bash
-git clone https://github.com/mehmethayirli/wiener-tools.git
-cd wiener-tools
+git clone https://github.com/wienerlabs/wiener-claude.git
+cd wiener-claude
 npm install
 npm start
 ```

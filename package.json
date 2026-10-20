@@ -4,13 +4,13 @@
   "description": "Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel: ısı haritaları, oturumlar, arama, maliyet ve limitler. Yerel çalışır, veri göndermez.",
   "license": "MIT",
   "author": "Wiener Labs",
-  "homepage": "https://github.com/mehmethayirli/wiener-tools#readme",
+  "homepage": "https://github.com/wienerlabs/wiener-claude#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mehmethayirli/wiener-tools.git"
+    "url": "git+https://github.com/wienerlabs/wiener-claude.git"
   },
   "bugs": {
-    "url": "https://github.com/mehmethayirli/wiener-tools/issues"
+    "url": "https://github.com/wienerlabs/wiener-claude/issues"
   },
   "keywords": [
     "claude",
