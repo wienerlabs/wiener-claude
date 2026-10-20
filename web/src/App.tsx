@@ -1,32 +1,45 @@
-import { Activity, LayoutGrid, Moon, Monitor, Sun } from 'lucide-react'
+import { Activity, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { IndexStatus } from '../../shared/types.ts'
 import { cx } from './components/ui.tsx'
 import { getJson, useApi } from './lib/api.ts'
 import { fmtRelative } from './lib/format.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
+import { Costs } from './screens/Costs.tsx'
 import { Overview } from './screens/Overview.tsx'
+import { Projects } from './screens/Projects.tsx'
 import { Sessions } from './screens/Sessions.tsx'
 
 const NAV = [
   { to: '/', label: 'Genel bakış', icon: LayoutGrid, match: (p: string) => p === '/' },
   { to: '/oturumlar', label: 'Oturumlar', icon: Activity, match: (p: string) => p.startsWith('/oturumlar') },
+  { to: '/projeler', label: 'Projeler', icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
+  { to: '/maliyet', label: 'Maliyet', icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
+]
+
+const TITLES: [string, string][] = [
+  ['/oturumlar', 'Oturumlar'],
+  ['/projeler', 'Projeler'],
+  ['/maliyet', 'Maliyet'],
 ]
 
 export function App() {
   const { path } = useLocation()
-  const sessionId = path.startsWith('/oturumlar/') ? decodeURIComponent(path.slice('/oturumlar/'.length)) : null
+  const tail = (prefix: string) => (path.startsWith(prefix) ? decodeURIComponent(path.slice(prefix.length)) || null : null)
+  const sessionId = tail('/oturumlar/')
+  const projectKey = tail('/projeler/')
 
   useEffect(() => {
-    document.title = path.startsWith('/oturumlar') ? 'Oturumlar · Wiener Tools' : 'Wiener Tools'
+    const title = TITLES.find(([prefix]) => path.startsWith(prefix))?.[1]
+    document.title = title ? `${title} · Wiener Tools` : 'Wiener Tools'
   }, [path])
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
       <aside className="flex items-center gap-4 border-b border-line bg-bg px-4 py-3 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:gap-0 md:border-r md:border-b-0 md:px-3 md:py-5">
-        <a href="/" onClick={(e) => onLinkClick(e, '/')} className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
+        <a href="/" onClick={(e) => onLinkClick(e, '/')} aria-label="Wiener Tools ana sayfa" className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
           <Mark />
-          <span className="font-display text-[17px] font-semibold tracking-[-0.02em]">Wiener Tools</span>
+          <span className="hidden font-display text-[17px] font-semibold tracking-[-0.02em] sm:inline">Wiener Tools</span>
         </a>
         <nav aria-label="Ana menü" className="flex gap-1 md:flex-col">
           {NAV.map(({ to, label, icon: Icon, match }) => {
@@ -55,7 +68,17 @@ export function App() {
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-8 md:py-8">
-        {path === '/' ? <Overview /> : path.startsWith('/oturumlar') ? <Sessions selectedId={sessionId} /> : <NotFound />}
+        {path === '/' ? (
+          <Overview />
+        ) : path.startsWith('/oturumlar') ? (
+          <Sessions selectedId={sessionId} />
+        ) : path.startsWith('/projeler') ? (
+          <Projects selectedKey={projectKey} />
+        ) : path === '/maliyet' ? (
+          <Costs />
+        ) : (
+          <NotFound />
+        )}
       </main>
     </div>
   )

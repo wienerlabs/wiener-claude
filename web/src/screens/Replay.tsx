@@ -9,54 +9,103 @@ import { fmtCompact, fmtDateTime, fmtDuration, fmtInt, fmtTime, fmtUsd, modelNam
 
 const PAGE = 25
 
-/**
- * Loads a transcript a page of turns at a time. When the index updates, the last loaded page is
- * fetched again so a session that is still running grows in place.
- */
-function useReplay(id: string) {
-  const version = useDataVersion()
-  const [state, setState] = useState<{ id: string; session: SessionRow | null; turns: ReplayTurn[]; total: number; missing: boolean; error: string | null }>(
-    { id, session: null, turns: [], total: 0, missing: false, error: null },
-  )
-  const [loadingMore, setLoadingMore] = useState(false)
-  const loaded = useRef(0)
-
-  const fetchFrom = useCallback(
-    async (from: number) => {
-      const page = await getJson<ReplayPage>(`/api/sessions/${encodeURIComponent(id)}?from=${from}&limit=${PAGE}`)
-      setState((s) => {
-        const base = s.id === id ? s.turns.slice(0, from) : []
-        const turns = [...base, ...page.turns]
-        loaded.current = turns.length
-        return { id, session: page.session, turns, total: page.totalTurns, missing: page.fileMissing, error: null }
-      })
-    },
-    [id],
-  )
-
-  useEffect(() => {
-    loaded.current = 0
-    setState({ id, session: null, turns: [], total: 0, missing: false, error: null })
-  }, [id])
-
-  useEffect(() => {
-    const from = loaded.current === 0 ? 0 : Math.floor((loaded.current - 1) / PAGE) * PAGE
-    fetchFrom(from).catch((err: unknown) => setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err) })))
-  }, [fetchFrom, version])
-
-  const more = async () => {
-    setLoadingMore(true)
-    try {
-      await fetchFrom(loaded.current)
-    } finally {
-      setLoadingMore(false)
-    }
-  }
-  return { ...(state.id === id ? state : { session: null, turns: [], total: 0, missing: false, error: null }), more, loadingMore }
+interface ReplayState {
+  key: string
+  session: SessionRow | null
+  /** Index of turns[0] in the whole transcript; a search hit can open mid-session. */
+  start: number
+  turns: ReplayTurn[]
+  total: number
+  focusTurn: number | null
+  missing: boolean
+  error: string | null
 }
 
-export function Replay({ id }: { id: string }) {
-  const { session, turns, total, missing, error, more, loadingMore } = useReplay(id)
+const empty = (key: string): ReplayState => ({ key, session: null, start: 0, turns: [], total: 0, focusTurn: null, missing: false, error: null })
+
+/**
+ * Loads a transcript a page of turns at a time, starting at the first turn or at a search hit.
+ * When the index updates, the last loaded page is fetched again so a running session grows in place.
+ */
+function useReplay(id: string, focusKey: string | null) {
+  const key = `${id}|${focusKey ?? ''}`
+  const version = useDataVersion()
+  const [state, setState] = useState<ReplayState>(() => empty(key))
+  const [busy, setBusy] = useState(false)
+  const current = useRef(state)
+  current.current = state
+
+  const url = useCallback(
+    (params: Record<string, string | number>) =>
+      `/api/sessions/${encodeURIComponent(id)}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`,
+    [id],
+  )
+  const fail = (err: unknown) => setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err) }))
+
+  // First page: the beginning, or the page around the hit.
+  useEffect(() => {
+    setState(empty(key))
+    const params: Record<string, string | number> = focusKey ? { around: focusKey, limit: PAGE } : { from: 0, limit: PAGE }
+    getJson<ReplayPage>(url(params)).then(
+      (page) => setState({ key, session: page.session, start: page.from, turns: page.turns, total: page.totalTurns, focusTurn: page.focusTurn, missing: page.fileMissing, error: null }),
+      fail,
+    )
+  }, [key, focusKey, url])
+
+  // Live updates: refetch the tail that is on screen.
+  const firstVersion = useRef(version)
+  useEffect(() => {
+    if (version === firstVersion.current) return
+    const s = current.current
+    if (!s.session || s.key !== key) return
+    const from = Math.max(s.start, s.start + s.turns.length - PAGE)
+    getJson<ReplayPage>(url({ from, limit: PAGE })).then((page) => {
+      setState((prev) => {
+        if (prev.key !== key) return prev
+        const keep = prev.turns.slice(0, from - prev.start)
+        return { ...prev, session: page.session, turns: [...keep, ...page.turns], total: page.totalTurns, missing: page.fileMissing }
+      })
+    }, () => {})
+  }, [version, key, url])
+
+  const load = async (direction: 'before' | 'after') => {
+    const s = current.current
+    setBusy(true)
+    try {
+      if (direction === 'after') {
+        const from = s.start + s.turns.length
+        const page = await getJson<ReplayPage>(url({ from, limit: PAGE }))
+        setState((prev) => (prev.key === key ? { ...prev, turns: [...prev.turns, ...page.turns], total: page.totalTurns } : prev))
+      } else {
+        const from = Math.max(0, s.start - PAGE)
+        const page = await getJson<ReplayPage>(url({ from, limit: s.start - from }))
+        setState((prev) => (prev.key === key ? { ...prev, start: from, turns: [...page.turns, ...prev.turns] } : prev))
+      }
+    } catch (err) {
+      fail(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { ...(state.key === key ? state : empty(key)), load, busy }
+}
+
+export function Replay({ id, focusKey = null }: { id: string; focusKey?: string | null }) {
+  const { session, start, turns, total, focusTurn, missing, error, load, busy } = useReplay(id, focusKey)
+  const scrolled = useRef<string | null>(null)
+
+  // Bring a search hit into view once, after its page has rendered.
+  useEffect(() => {
+    if (focusTurn === null || !session) return
+    const marker = `${id}|${focusKey}`
+    if (scrolled.current === marker) return
+    const el = (focusKey && document.getElementById(`item-${focusKey}`)) || document.getElementById(`turn-${focusTurn}`)
+    if (el) {
+      el.scrollIntoView({ block: 'center' })
+      scrolled.current = marker
+    }
+  }, [focusTurn, session, id, focusKey, turns.length])
+
   if (error) return <ErrorNote message={error} />
   if (!session) {
     return (
@@ -67,6 +116,7 @@ export function Replay({ id }: { id: string }) {
       </div>
     )
   }
+  const remaining = total - (start + turns.length)
   return (
     <article className="space-y-5">
       <Header s={session} />
@@ -77,19 +127,22 @@ export function Replay({ id }: { id: string }) {
         </p>
       ) : null}
       {!missing && total === 0 ? <p className="text-ink-2">Bu oturumda henüz bir istem yok.</p> : null}
+      {focusKey && focusTurn === null && !missing && total > 0 ? (
+        <p className="text-[13px] text-ink-2">Aranan mesaj bu dökümde bulunamadı; oturum baştan gösteriliyor.</p>
+      ) : null}
+      {start > 0 ? (
+        <button type="button" onClick={() => load('before')} disabled={busy} className="w-full rounded-lg border border-line bg-surface py-2.5 text-[13px] text-ink-2 hover:text-ink">
+          {busy ? 'Yükleniyor…' : `Önceki ${Math.min(PAGE, start)} turu göster (${fmtInt(start)} tur önce)`}
+        </button>
+      ) : null}
       <ol className="space-y-4">
         {turns.map((t) => (
-          <Turn key={t.index} turn={t} />
+          <Turn key={t.index} turn={t} focused={t.index === focusTurn} focusKey={t.index === focusTurn ? focusKey : null} />
         ))}
       </ol>
-      {turns.length < total ? (
-        <button
-          type="button"
-          onClick={more}
-          disabled={loadingMore}
-          className="w-full rounded-lg border border-line bg-surface py-2.5 text-[13px] text-ink-2 hover:text-ink"
-        >
-          {loadingMore ? 'Yükleniyor…' : `Sonraki ${Math.min(PAGE, total - turns.length)} turu göster (${fmtInt(total - turns.length)} kaldı)`}
+      {remaining > 0 ? (
+        <button type="button" onClick={() => load('after')} disabled={busy} className="w-full rounded-lg border border-line bg-surface py-2.5 text-[13px] text-ink-2 hover:text-ink">
+          {busy ? 'Yükleniyor…' : `Sonraki ${Math.min(PAGE, remaining)} turu göster (${fmtInt(remaining)} kaldı)`}
         </button>
       ) : null}
     </article>
@@ -163,14 +216,20 @@ function Stat({ label, value, note }: { label: string; value: string; note?: Rea
   )
 }
 
-const Turn = memo(function Turn({ turn }: { turn: ReplayTurn }) {
+const Turn = memo(function Turn({ turn, focused, focusKey }: { turn: ReplayTurn; focused: boolean; focusKey: string | null }) {
   return (
-    <li className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3">
-      <time className="pt-2.5 text-right font-mono text-[12px] text-ink-3 num">{fmtTime(turn.ts)}</time>
+    <li id={`turn-${turn.index}`} className="grid scroll-mt-6 grid-cols-[3rem_minmax(0,1fr)] gap-3" aria-current={focused ? 'true' : undefined}>
+      <time className={cx('pt-2.5 text-right font-mono text-[12px] num', focused ? 'font-medium text-accent' : 'text-ink-3')}>{fmtTime(turn.ts)}</time>
       <div className="min-w-0 space-y-2">
-        {turn.prompt ? <Prompt p={turn.prompt} /> : null}
+        {turn.prompt ? (
+          <Hit id={turn.prompt.key} focusKey={focusKey}>
+            <Prompt p={turn.prompt} />
+          </Hit>
+        ) : null}
         {turn.items.map((item, i) => (
-          <Item key={i} item={item} />
+          <Hit key={i} id={item.type === 'text' ? item.key : item.type === 'tool' ? item.id : null} focusKey={focusKey}>
+            <Item item={item} open={item.type === 'tool' && item.id === focusKey} />
+          </Hit>
         ))}
         {turn.cost > 0 || turn.toolCalls > 0 || turn.errors > 0 ? (
           <p className="pl-1 font-mono text-[11px] text-ink-3 num">
@@ -204,7 +263,18 @@ function Prompt({ p }: { p: NonNullable<ReplayTurn['prompt']> }) {
   )
 }
 
-function Item({ item }: { item: ReplayItem }) {
+/** Anchors a replay element so a search hit can scroll to it, and rings the one that matched. */
+function Hit({ id, focusKey, children }: { id: string | null; focusKey: string | null; children: React.ReactNode }) {
+  if (!id) return <>{children}</>
+  const hit = id === focusKey
+  return (
+    <div id={`item-${id}`} className={cx('scroll-mt-6 rounded-lg', hit && 'bg-accent-soft/60 shadow-[0_0_0_2px_var(--accent)]')}>
+      {children}
+    </div>
+  )
+}
+
+function Item({ item, open = false }: { item: ReplayItem; open?: boolean }) {
   switch (item.type) {
     case 'text':
       return (
@@ -225,7 +295,7 @@ function Item({ item }: { item: ReplayItem }) {
         </details>
       )
     case 'tool':
-      return <ToolCall item={item} />
+      return <ToolCall item={item} open={open} />
     case 'compact':
       return (
         <div className="flex items-center gap-3 py-1 text-[12px] text-ink-3" role="separator">
@@ -245,12 +315,12 @@ function Item({ item }: { item: ReplayItem }) {
   }
 }
 
-function ToolCall({ item }: { item: Extract<ReplayItem, { type: 'tool' }> }) {
+function ToolCall({ item, open }: { item: Extract<ReplayItem, { type: 'tool' }>; open: boolean }) {
   const failed = item.result?.isError && !item.result.denied
   const denied = item.result?.denied
   const name = item.name.startsWith('mcp__') ? item.name.split('__').slice(1).join(' › ') : item.name
   return (
-    <details className={cx('group rounded-lg border bg-surface', failed ? 'border-danger/40' : 'border-line')}>
+    <details open={open || undefined} className={cx('group rounded-lg border bg-surface', failed ? 'border-danger/40' : 'border-line')}>
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-[13px]">
         <ChevronRight className="size-3.5 shrink-0 text-ink-3 transition-transform group-open:rotate-90" aria-hidden />
         <Wrench className="size-3.5 shrink-0 text-ink-3" aria-hidden />

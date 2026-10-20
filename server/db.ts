@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 // The index is a cache of ~/.claude. Bump this when the schema or the way records are read
 // changes; the old index is then dropped and rebuilt from the transcripts.
-const INDEX_VERSION = 2
+const INDEX_VERSION = 4
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -108,6 +108,47 @@ CREATE TABLE prs (
 );
 CREATE INDEX prs_session ON prs(session_id);
 
+-- Searchable text. "norm" is the text with Turkish dotless/dotted i folded to plain i, so a
+-- search typed without Turkish letters still matches; it has the same length as "text".
+CREATE TABLE texts (
+  id INTEGER PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  session_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  norm TEXT NOT NULL
+);
+CREATE INDEX texts_session ON texts(session_id);
+CREATE VIRTUAL TABLE texts_fts USING fts5(norm, content='texts', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
+CREATE TRIGGER texts_ai AFTER INSERT ON texts BEGIN
+  INSERT INTO texts_fts (rowid, norm) VALUES (new.id, new.norm);
+END;
+CREATE TRIGGER texts_ad AFTER DELETE ON texts BEGIN
+  INSERT INTO texts_fts (texts_fts, rowid, norm) VALUES ('delete', old.id, old.norm);
+END;
+
+CREATE TABLE file_edits (
+  key TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  path TEXT NOT NULL,
+  tool TEXT NOT NULL,
+  added INTEGER NOT NULL,
+  removed INTEGER NOT NULL
+);
+CREATE INDEX edits_session ON file_edits(session_id);
+CREATE INDEX edits_path ON file_edits(path);
+
+CREATE TABLE limit_hits (
+  uuid TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  resets_at INTEGER
+);
+
 CREATE TABLE desktop_sessions (
   cli_session_id TEXT PRIMARY KEY,
   desktop_id TEXT,
@@ -143,6 +184,11 @@ function readVersion(db: Db): number {
   return row?.user_version ?? 0
 }
 
+/** Folds Turkish ı and İ to i and I. Keeps the string length, so offsets still line up. */
+export function foldTurkish(text: string): string {
+  return text.replace(/ı/g, 'i').replace(/İ/g, 'I')
+}
+
 export function getMeta(db: Db, key: string): string | null {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined
   return row?.value ?? null
@@ -167,7 +213,7 @@ export function transaction<T>(db: Db, fn: () => T): T {
 /** Removes everything derived from ~/.claude, keeping settings in meta. */
 export function clearIndex(db: Db): void {
   transaction(db, () => {
-    for (const t of ['files', 'sessions', 'api_calls', 'prompts', 'tool_uses', 'events', 'cost_states', 'prs', 'desktop_sessions']) {
+    for (const t of ['files', 'sessions', 'api_calls', 'prompts', 'tool_uses', 'events', 'cost_states', 'prs', 'desktop_sessions', 'texts', 'file_edits', 'limit_hits']) {
       db.exec(`DELETE FROM ${t}`)
     }
   })

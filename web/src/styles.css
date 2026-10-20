@@ -27,6 +27,11 @@
   --heat-3: #2a78d6;
   --heat-4: #184f95;
   --focus: #2a78d6;
+  /* Categorical slots (validated for color vision deficiency); used where series need names. */
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,6 +56,10 @@
     --heat-3: #5598e7;
     --heat-4: #9ec5f4;
     --focus: #6da7ec;
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
   }
 }
 
@@ -75,6 +84,10 @@
   --heat-3: #5598e7;
   --heat-4: #9ec5f4;
   --focus: #6da7ec;
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
 }
 
 @theme inline {

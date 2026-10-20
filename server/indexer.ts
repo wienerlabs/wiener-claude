@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { StatementSync } from 'node:sqlite'
 import type { IndexStatus } from '../shared/types.ts'
-import { type Db, clearIndex, getMeta, setMeta, transaction } from './db.ts'
+import { type Db, clearIndex, foldTurkish, getMeta, setMeta, transaction } from './db.ts'
 import { readLinesFrom } from './jsonl.ts'
 import { type ApiFact, type Fact, type SessionFact, parseLine, parseTs } from './parse.ts'
 import type { Pricing } from './pricing.ts'
@@ -248,6 +248,15 @@ export class Indexer {
           case 'pr':
             this.st.insertPr.run(f.url, f.sessionId, f.number, f.repo, f.ts)
             break
+          case 'text':
+            this.st.insertText.run(f.key, f.sessionId, f.ts, f.textKind, f.text, foldTurkish(f.text))
+            break
+          case 'file_edit':
+            this.st.insertEdit.run(f.key, f.sessionId, f.ts, localParts(f.ts).day, f.path, f.tool, f.added, f.removed)
+            break
+          case 'limit_hit':
+            this.st.insertLimitHit.run(f.uuid, f.sessionId, f.ts, f.limitKind, f.resetsAt)
+            break
         }
       }
     })
@@ -379,6 +388,10 @@ function statements(db: Db) {
         tool_ms = CASE WHEN excluded.total_cost >= total_cost THEN excluded.tool_ms ELSE tool_ms END,
         duration_ms = CASE WHEN excluded.total_cost >= total_cost THEN excluded.duration_ms ELSE duration_ms END,
         total_cost = MAX(total_cost, excluded.total_cost)`),
+    insertText: p('INSERT OR IGNORE INTO texts (key, session_id, ts, kind, text, norm) VALUES (?, ?, ?, ?, ?, ?)'),
+    insertEdit: p(`INSERT OR IGNORE INTO file_edits (key, session_id, ts, day, path, tool, added, removed)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+    insertLimitHit: p('INSERT OR IGNORE INTO limit_hits (uuid, session_id, ts, kind, resets_at) VALUES (?, ?, ?, ?, ?)'),
     insertPr: p(`INSERT INTO prs (url, session_id, number, repo, ts) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(url) DO UPDATE SET number = excluded.number, repo = excluded.repo`),
   }

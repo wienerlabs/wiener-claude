@@ -98,13 +98,15 @@ export interface SessionRow {
   counter: { cost: number; since: number; transcriptCost: number } | null
   /** Sum over runs of the counter's excess over the transcript: calls that were billed but not logged. */
   costHidden: number
-  /** Known only when the counter's runs cover the whole session. */
-  linesAdded: number | null
-  linesRemoved: number | null
+  /** Lines changed by Claude's edits (Edit, Write and shell edits), from the transcript. */
+  linesAdded: number
+  linesRemoved: number
   prUrl: string | null
   prNumber: number | null
   models: string[]
   archived: boolean
+  /** Present when the list was filtered by a search query. */
+  match?: SearchMatch | null
 }
 
 export interface SessionList {
@@ -119,7 +121,7 @@ export interface ProjectOption {
 }
 
 export type ReplayItem =
-  | { type: 'text'; text: string; ts: number }
+  | { type: 'text'; text: string; ts: number; key: string }
   | { type: 'thinking'; text: string; ts: number; durationMs: number | null }
   | {
       type: 'tool'
@@ -136,7 +138,7 @@ export type ReplayItem =
 export interface ReplayTurn {
   index: number
   ts: number
-  prompt: { text: string; kind: 'prompt' | 'command' | 'bash'; images: number } | null
+  prompt: { text: string; kind: 'prompt' | 'command' | 'bash'; images: number; key: string } | null
   items: ReplayItem[]
   cost: number
   outputTokens: number
@@ -149,6 +151,115 @@ export interface ReplayPage {
   turns: ReplayTurn[]
   from: number
   totalTurns: number
+  /** Index of the turn holding the record asked for with ?around=, if any. */
+  focusTurn: number | null
   /** Claude Code deletes old transcripts; the indexed numbers outlive the file. */
   fileMissing: boolean
+}
+
+export interface SearchMatch {
+  /** Text around the first hit; hits are wrapped in \u0002 … \u0003. */
+  snippet: string
+  /** Record to jump to in the replay. */
+  key: string
+  kind: 'prompt' | 'reply' | 'command'
+  ts: number
+  hits: number
+}
+
+export interface DailyCost {
+  day: string
+  cost: number
+  byModel: Record<string, number>
+}
+
+export interface ModelCost {
+  model: string
+  cost: number
+  calls: number
+  output: number
+  share: number
+}
+
+export interface CostMix {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+}
+
+export interface Suggestion {
+  text: string
+  /** Estimated monthly saving in dollars, when one can be computed. */
+  saving: number | null
+}
+
+export interface LimitHit {
+  kind: 'five_hour' | 'seven_day' | 'other'
+  at: number
+  resetsAt: number | null
+}
+
+export interface Limits {
+  /** "Max 5x", "Pro", … from the local account file; null when unknown. */
+  plan: string | null
+  /** Claude Code's own utilization reading, when it is recent enough to mean something. */
+  measured: {
+    fetchedAt: number
+    fresh: boolean
+    fiveHour: { percent: number; resetsAt: number | null } | null
+    sevenDay: { percent: number; resetsAt: number | null } | null
+  } | null
+  /** The current 5-hour usage window, estimated from local activity. */
+  block: { start: number; end: number; cost: number; messages: number } | null
+  rolling7: { cost: number; atLastWeeklyHit: { at: number; cost: number } | null }
+  hits: LimitHit[]
+}
+
+export interface CostReport {
+  month: { from: string; to: string; cost: number; projected: number; lastMonth: number; lastMonthToDate: number; hidden: number }
+  cacheSavings: number
+  daily: DailyCost[]
+  models: ModelCost[]
+  mix: CostMix
+  projects: { key: string; name: string; cost: number }[]
+  suggestions: Suggestion[]
+  limits: Limits
+}
+
+export interface ProjectSummary {
+  key: string
+  name: string
+  path: string | null
+  sessions: number
+  firstTs: number
+  lastTs: number
+  cost: number
+  cost30: number
+  messages30: number
+  /** Messages per day for the last 12 weeks, oldest first. */
+  strip: number[]
+  topFiles: string[]
+}
+
+export interface ProjectFile {
+  path: string
+  edits: number
+  added: number
+  removed: number
+  lastTs: number
+  sessions: number
+}
+
+export interface ProjectDetail extends ProjectSummary {
+  prompts: number
+  messages: number
+  toolCalls: number
+  toolErrors: number
+  linesAdded: number
+  linesRemoved: number
+  files: ProjectFile[]
+  prs: { url: string; number: number | null; repo: string | null; ts: number; sessionId: string; title: string }[]
+  tools: { name: string; calls: number; errors: number }[]
+  models: { model: string; cost: number }[]
 }

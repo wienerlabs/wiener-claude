@@ -40,11 +40,25 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
   if (project) params.set('project', project)
   const list = useApi<SessionList>(`/api/sessions?${params}`)
   const projects = useApi<ProjectOption[]>('/api/projects')
-  const keep = query.toString() ? `?${query}` : ''
+  // Keep the list's filters when opening a session, but not a previous search hit.
+  const listQuery = new URLSearchParams(query)
+  listQuery.delete('mesaj')
+  const keep = listQuery.size ? `?${listQuery}` : ''
+  const hrefFor = (s: SessionRow) => {
+    const next = new URLSearchParams(listQuery)
+    if (s.match) next.set('mesaj', s.match.key)
+    return `/oturumlar/${s.id}${next.size ? `?${next}` : ''}`
+  }
 
   return (
     <div className="mx-auto grid max-w-[1400px] gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
-      <section aria-label="Oturum listesi" className={cx('min-w-0 space-y-3', selectedId && 'hidden lg:block')}>
+      <section
+        aria-label="Oturum listesi"
+        className={cx(
+          'min-w-0 space-y-3 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:self-start lg:overflow-y-auto lg:pr-1',
+          selectedId && 'hidden lg:block',
+        )}
+      >
         <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">Oturumlar</h1>
         <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 focus-within:border-accent">
           <Search className="size-4 text-ink-3" aria-hidden />
@@ -52,7 +66,7 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Başlıkta ya da istemlerde ara"
+            placeholder="Başlıkta ya da konuşmalarda ara"
             className="h-9 w-full bg-transparent text-[14px] outline-none placeholder:text-ink-3"
           />
         </label>
@@ -96,7 +110,7 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
             ) : (
               <ul className="overflow-hidden rounded-xl border border-line bg-surface">
                 {list.data.rows.map((s) => (
-                  <SessionItem key={s.id} s={s} active={s.id === selectedId} href={`/oturumlar/${s.id}${keep}`} />
+                  <SessionItem key={s.id} s={s} active={s.id === selectedId} href={hrefFor(s)} />
                 ))}
               </ul>
             )}
@@ -123,7 +137,7 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
             >
               <ArrowLeft className="size-4" aria-hidden /> Bütün oturumlar
             </a>
-            <Replay id={selectedId} />
+            <Replay id={selectedId} focusKey={query.get('mesaj')} />
           </>
         ) : (
           <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-dashed border-line text-center">
@@ -163,7 +177,47 @@ function SessionItem({ s, active, href }: { s: SessionRow; active: boolean; href
           {fmtInt(s.messages)} mesaj · {fmtUsd(s.costEstimate)} · {fmtDuration(s.activeMs)}
           {s.toolErrors > 0 ? <span className="text-danger"> · {s.toolErrors} hata</span> : null}
         </span>
+        {s.match ? (
+          <span className="mt-2 block rounded-md bg-raised px-2.5 py-1.5 text-[12px] leading-relaxed text-ink-2">
+            <span className="mr-1.5 text-ink-3">{MATCH_KIND[s.match.kind]}{s.match.hits > 1 ? ` · ${s.match.hits} yerde` : ''}:</span>
+            <Snippet text={s.match.snippet} />
+          </span>
+        ) : null}
       </a>
     </li>
+  )
+}
+
+const MATCH_KIND: Record<NonNullable<SessionRow['match']>['kind'], string> = {
+  prompt: 'İstemde',
+  reply: 'Yanıtta',
+  command: 'Komutta',
+}
+
+/** Renders \u0002…\u0003 hit markers as <mark>; the text itself is never parsed as HTML. */
+function Snippet({ text }: { text: string }) {
+  const parts: { hit: boolean; text: string }[] = []
+  let hit = false
+  let buf = ''
+  for (const ch of text) {
+    if (ch === '\u0002' || ch === '\u0003') {
+      if (buf) parts.push({ hit, text: buf })
+      buf = ''
+      hit = ch === '\u0002'
+    } else buf += ch
+  }
+  if (buf) parts.push({ hit, text: buf })
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.hit ? (
+          <mark key={i} className="rounded-[3px] bg-accent-soft px-0.5 text-accent">
+            {p.text}
+          </mark>
+        ) : (
+          <span key={i}>{p.text}</span>
+        ),
+      )}
+    </>
   )
 }

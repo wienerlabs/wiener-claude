@@ -54,6 +54,13 @@ export type Fact =
     }
   | { kind: 'title'; sessionId: string; source: 'custom' | 'ai'; title: string }
   | { kind: 'pr'; sessionId: string; url: string; number: number | null; repo: string | null; ts: number }
+  | { kind: 'text'; key: string; sessionId: string; ts: number; textKind: TextKind; text: string }
+  | { kind: 'file_edit'; key: string; sessionId: string; ts: number; path: string; tool: EditTool; added: number; removed: number }
+  | { kind: 'limit_hit'; uuid: string; sessionId: string; ts: number; limitKind: LimitKind; resetsAt: number | null }
+
+export type TextKind = 'prompt' | 'reply' | 'command'
+export type EditTool = 'edit' | 'write' | 'bash'
+export type LimitKind = 'five_hour' | 'seven_day' | 'other'
 
 /** api_error: an error shown to the user. api_retry: a retried request. */
 export type EventKind = 'api_error' | 'api_retry' | 'compact' | 'interrupt'
@@ -149,6 +156,73 @@ export function previewOf(text: string, max = 280): string {
   return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine
 }
 
+/** Searchable text is capped so one pasted log can't dominate the index. */
+const MAX_SEARCH_TEXT = 20_000
+const clipText = (t: string) => (t.length > MAX_SEARCH_TEXT ? t.slice(0, MAX_SEARCH_TEXT) : t)
+
+/** Lines added and removed by a list of unified-diff hunks. */
+export function hunkCounts(hunks: unknown): { added: number; removed: number } {
+  let added = 0
+  let removed = 0
+  if (!Array.isArray(hunks)) return { added, removed }
+  for (const h of hunks) {
+    const hunk = obj(h)
+    if (!hunk) continue
+    if (Array.isArray(hunk.lines)) {
+      for (const line of hunk.lines) {
+        if (typeof line !== 'string') continue
+        if (line.startsWith('+')) added++
+        else if (line.startsWith('-')) removed++
+      }
+    } else {
+      added += num(hunk.newLines)
+      removed += num(hunk.oldLines)
+    }
+  }
+  return { added, removed }
+}
+
+/** A worktree's copy of a file counts as the repository's file. */
+export function normalizeEditPath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/\/\.claude\/worktrees\/[^/]+\//, '/')
+}
+
+/** Claude Code's own scratch folders: files Claude writes for itself, not project files. */
+export function isScratchPath(p: string): boolean {
+  return /^\/(private\/)?tmp\/claude-\d+\//.test(p)
+}
+
+function lineCount(text: string): number {
+  if (!text) return 0
+  const n = text.split('\n').length
+  return text.endsWith('\n') ? n - 1 : n
+}
+
+/** File changes a successful tool result reports: Edit and Write patches, and shell edits. */
+function fileEdits(tur: Json, uuid: string, sessionId: string, ts: number): Fact[] {
+  const out: Fact[] = []
+  const push = (path: string, tool: EditTool, counts: { added: number; removed: number }) => {
+    if (!path || isScratchPath(path)) return
+    out.push({ kind: 'file_edit', key: `${uuid}:${out.length}`, sessionId, ts, path: normalizeEditPath(path), tool, ...counts })
+  }
+  const filePath = str(tur.filePath)
+  if (filePath && tur.type === 'create' && typeof tur.content === 'string') {
+    push(filePath, 'write', { added: lineCount(tur.content), removed: 0 })
+  } else if (filePath && Array.isArray(tur.structuredPatch)) {
+    push(filePath, typeof tur.content === 'string' ? 'write' : 'edit', hunkCounts(tur.structuredPatch))
+  }
+  const bash = obj(tur.bashEditDiff)
+  // Files a git command touched (checkout, pull, merge) are not edits Claude wrote.
+  if (bash && !tur.gitOperation && Array.isArray(bash.files)) {
+    for (const f of bash.files) {
+      const file = obj(f)
+      const p = str(file?.filePath)
+      if (file && p) push(p, 'bash', hunkCounts(file.hunks))
+    }
+  }
+  return out
+}
+
 function mcpServerOf(name: string): string | null {
   if (!name.startsWith('mcp__')) return null
   return name.split('__')[1] || null
@@ -183,6 +257,17 @@ export function parseLine(o: Json, ctx: LineContext): Fact[] {
     const model = str(m.model)
     const uuid = str(o.uuid)
     if (o.isApiErrorMessage && uuid) facts.push({ kind: 'event', uuid, sessionId, ts, eventKind: 'api_error' })
+    const quota = obj(o.quotaLimits)
+    if (quota?.status === 'rejected' && uuid) {
+      const type = quota.rateLimitType
+      const resets = num(quota.resetsAt)
+      facts.push({
+        kind: 'limit_hit', uuid, sessionId, ts,
+        limitKind: type === 'five_hour' || type === 'seven_day' ? type : 'other',
+        // resetsAt is in seconds.
+        resetsAt: resets ? (resets < 1e12 ? resets * 1000 : resets) : null,
+      })
+    }
     const usage = obj(m.usage)
     const msgId = str(m.id)
     if (model && model !== '<synthetic>' && usage && msgId) {
@@ -209,13 +294,20 @@ export function parseLine(o: Json, ctx: LineContext): Fact[] {
       })
     }
     if (Array.isArray(m.content)) {
-      for (const b of m.content) {
+      m.content.forEach((b, i) => {
         const block = obj(b)
-        if (block?.type !== 'tool_use') continue
+        if (block?.type === 'text' && uuid && !ctx.isSubagent && !o.isApiErrorMessage) {
+          const text = str(block.text)?.trim()
+          if (text) facts.push({ kind: 'text', key: `${uuid}:${i}`, sessionId, ts, textKind: 'reply', text: clipText(text) })
+        }
+        if (block?.type !== 'tool_use') return
         const id = str(block.id)
         const name = str(block.name)
-        if (id && name) facts.push({ kind: 'tool_use', id, sessionId, ts, name, mcpServer: mcpServerOf(name), sidechain })
-      }
+        if (!id || !name) return
+        facts.push({ kind: 'tool_use', id, sessionId, ts, name, mcpServer: mcpServerOf(name), sidechain })
+        const command = name === 'Bash' ? str(obj(block.input)?.command) : null
+        if (command && !ctx.isSubagent) facts.push({ kind: 'text', key: id, sessionId, ts, textKind: 'command', text: command.slice(0, 300) })
+      })
     }
     return facts
   }
@@ -230,11 +322,18 @@ export function parseLine(o: Json, ctx: LineContext): Fact[] {
       if (id) facts.push({ kind: 'tool_result', id, sessionId, ts, isError: r.is_error === true, denied })
     }
     const uuid = str(o.uuid)
-    if (!uuid || toolResults.length > 0 || ctx.isSubagent) return facts
+    if (!uuid) return facts
+    const tur = obj(o.toolUseResult)
+    if (tur && toolResults.length > 0 && !toolResults.some((r) => r.is_error === true)) {
+      facts.push(...fileEdits(tur, uuid, sessionId, ts))
+    }
+    if (toolResults.length > 0 || ctx.isSubagent) return facts
     if (text.trimStart().startsWith('[Request interrupted')) {
       facts.push({ kind: 'event', uuid, sessionId, ts, eventKind: 'interrupt' })
     } else if (isHumanPrompt(o, text)) {
       facts.push({ kind: 'prompt', uuid, sessionId, ts, promptKind: promptKind(text), preview: previewOf(text) })
+      const full = cleanPrompt(text)
+      if (full) facts.push({ kind: 'text', key: uuid, sessionId, ts, textKind: 'prompt', text: clipText(full) })
     }
     return facts
   }

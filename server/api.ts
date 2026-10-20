@@ -7,8 +7,10 @@ import { streamSSE } from 'hono/streaming'
 import type { HeatmapView, Metric, ReplayPage, SessionSource } from '../shared/types.ts'
 import type { Db } from './db.ts'
 import type { Indexer } from './indexer.ts'
+import { costReport, readAccount } from './costs.ts'
 import { liveSessions } from './live.ts'
 import type { Pricing } from './pricing.ts'
+import { projectDetail, projectList } from './projects.ts'
 import * as q from './queries.ts'
 import { turnsOf } from './replay.ts'
 
@@ -54,7 +56,7 @@ export function createApp(ctx: AppContext): Hono {
     const from = c.req.query('from') ?? range.from
     const to = c.req.query('to') ?? range.to
     if (!DAY.test(from) || !DAY.test(to)) return c.json({ error: 'Tarih YYYY-AA-GG biçiminde olmalı' }, 400)
-    return c.json(q.heatmap(db, view, metric, from, to))
+    return c.json(q.heatmap(db, view, metric, from, to, c.req.query('project') || null))
   })
 
   app.get('/api/day/:day', (c) => {
@@ -65,7 +67,14 @@ export function createApp(ctx: AppContext): Hono {
 
   app.get('/api/insights', (c) => c.json(q.insights(db)))
 
-  app.get('/api/projects', (c) => c.json(q.projects(db)))
+  app.get('/api/projects', (c) => c.json(projectList(db)))
+
+  app.get('/api/projects/:key', (c) => {
+    const detail = projectDetail(db, c.req.param('key'))
+    return detail ? c.json(detail) : c.json({ error: 'Proje bulunamadı' }, 404)
+  })
+
+  app.get('/api/costs', (c) => c.json(costReport(db, ctx.pricing, readAccount())))
 
   app.get('/api/sessions', (c) => {
     const source = c.req.query('source')
@@ -88,10 +97,16 @@ export function createApp(ctx: AppContext): Hono {
     const from = Math.max(0, Number(c.req.query('from') ?? 0) || 0)
     const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? REPLAY_PAGE) || REPLAY_PAGE))
     if (!file || !fs.existsSync(file.path)) {
-      return c.json({ session, turns: [], from: 0, totalTurns: 0, fileMissing: true } satisfies ReplayPage)
+      return c.json({ session, turns: [], from: 0, totalTurns: 0, focusTurn: null, fileMissing: true } satisfies ReplayPage)
     }
-    const turns = await turnsOf(file.path, ctx.pricing)
-    return c.json({ session, turns: turns.slice(from, from + limit), from, totalTurns: turns.length, fileMissing: false } satisfies ReplayPage)
+    const { turns, keyIndex } = await turnsOf(file.path, ctx.pricing)
+    // ?around=<key> opens the page holding a search hit, with a little context before it.
+    const around = c.req.query('around')
+    const focusTurn = around ? (keyIndex.get(around) ?? keyIndex.get(around.split(':')[0] ?? '') ?? null) : null
+    const start = focusTurn !== null ? Math.max(0, focusTurn - 2) : from
+    return c.json({
+      session, turns: turns.slice(start, start + limit), from: start, totalTurns: turns.length, focusTurn, fileMissing: false,
+    } satisfies ReplayPage)
   })
 
   app.get('/api/events', (c) =>

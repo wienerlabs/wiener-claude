@@ -4,7 +4,10 @@ Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.c
 
 - **Isı haritaları:** bir yıllık takvim, haftanın günü × saat, proje × gün. Mesaj, token, maliyet, oturum ya da hata üzerinden.
 - **Gün dökümü:** takvimde bir güne tıklayınca o günün oturumları açılır.
-- **Oturumlar:** arama, filtre ve her oturumun tur tur dökümü (istemler, Claude'un yanıtları, araç çağrıları, hatalar, bağlam özetlemeleri).
+- **Oturumlar:** her oturumun tur tur dökümü (istemler, Claude'un yanıtları, araç çağrıları, hatalar, bağlam özetlemeleri).
+- **Tam metin arama:** bütün istemlerde, yanıtlarda ve kabuk komutlarında arar; Türkçe harfsiz yazılan aramayı da bulur ("degisiklik" → "değişiklik", "kisa" → "kısa"). Bir sonuca tıklayınca döküm o mesajda açılır.
+- **Projeler:** her projenin yıllık etkinliği, en çok değişen dosyaları, açılan PR'ları, kullanılan araçlar ve modeller. Worktree'ler kendi repolarına sayılır.
+- **Maliyet ve limitler:** aylık harcama ve ay sonu tahmini, son 30 günün günlük maliyeti, paranın token türlerine ve modellere dağılımı, limitin dolduğu anlar, şu anki 5 saatlik pencere ve tasarruf fırsatları.
 - **Canlı:** dosyalar değiştikçe panel kendini günceller; açık oturumlar ayrıca listelenir.
 
 ## Çalıştırma
@@ -35,6 +38,7 @@ npm run typecheck
 | `~/.claude/projects/<proje>/<oturum>/subagents/**` | Subagent dökümleri; maliyetleri ana oturuma yazılır |
 | `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si |
 | `~/.claude/sessions/*.json` | Şu an çalışan Claude Code süreçleri |
+| `~/.claude.json` | Yalnızca plan adı ve Claude Code'un son limit ölçümü. E-posta, isim ve kimlikler okunmaz. |
 
 Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-tools/index.db` dosyasında tutar. Bu dosya silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar o dökümlerden sonra da kalır.
 
@@ -49,6 +53,8 @@ Wiener Tools `~/.claude` içine hiçbir şey yazmaz. Kendi indeksini `~/.wiener-
 
 - **Dökümde görünmeyen maliyet.** Claude Code'un kendi sayacı (`cost-state` kayıtları) dökümlere yazılmayan çağrıları da sayar; bu yüzden bazı oturumlarda dökümden hesaplanandan yüksektir. Sayaç yalnızca son süreç çalışmasını tuttuğu için oturum toplamı olarak kullanılamaz; Wiener Tools farkı oturum sayfasında ayrıca gösterir.
 - **Aktif süre**, aralarında 10 dakikadan uzun boşluk olmayan etkinliklerin toplamıdır.
+- **Değişen satırlar** Edit ve Write sonuçlarındaki yamalardan ve Claude Code'un kabuk komutları için tuttuğu farklardan sayılır. Git işlemlerinin (checkout, pull, merge) dokunduğu dosyalar ve Claude Code'un kendi geçici klasörleri sayılmaz.
+- **Limitler.** Kullanım limitinin yüzdesi yerelde tutulmaz; Claude Code'un `/usage` ile kaydettiği son ölçüm yalnızca yeniyse gösterilir. Limitin dolduğu anlar dökümlerden okunur. "Şu anki 5 saatlik pencere" yerel isteklerden tahmin edilir; "son 7 gün" karşılaştırması limitin en son dolduğu haftayla yapılır ve kesin bir yüzde değildir.
 
 ## Güvenlik
 
@@ -56,8 +62,8 @@ Sunucu varsayılan olarak yalnızca `127.0.0.1` adresinde dinler ve `Host` başl
 
 ## Yol haritası
 
-1. **Faz 1 (bu sürüm):** indeksleyici, Genel bakış, Oturumlar.
-2. **Faz 2:** Maliyet ve limitler, Projeler (en çok değişen dosyalar), tüm dökümlerde tam metin arama.
+1. **Faz 1:** indeksleyici, Genel bakış, Oturumlar.
+2. **Faz 2 (bu sürüm):** Maliyet ve limitler, Projeler, tam metin arama.
 3. **Faz 3:** Ortam (memory, plan, görev, skill, MCP, ayarlar), daha fazla içgörü, bütçe.
 
 Desktop oturum klasörünün yolu yalnızca macOS'ta doğrulandı; Windows ve Linux yolları Electron varsayılanlarına göre tahmin ediliyor.

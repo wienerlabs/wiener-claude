@@ -44,6 +44,8 @@ export function Legend({ metric, t, max }: { metric: Metric; t: [number, number,
 export interface TipContent {
   value: string
   label: string
+  /** Optional breakdown lines under the label, e.g. cost per model. */
+  rows?: [string, string][]
 }
 
 /**
@@ -75,6 +77,16 @@ export function useTooltip() {
     >
       <div className="font-mono num text-[13px] font-medium text-ink">{tip.value}</div>
       <div className="text-[11px] text-ink-2">{tip.label}</div>
+      {tip.rows?.length ? (
+        <div className="mt-1 space-y-0.5 border-t border-line pt-1">
+          {tip.rows.map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-4 text-[11px] text-ink-2">
+              <span>{k}</span>
+              <span className="font-mono num text-ink">{v}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   ) : null
 

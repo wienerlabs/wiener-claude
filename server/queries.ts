@@ -1,7 +1,8 @@
 import type {
-  DayDetail, HeatmapResponse, HeatmapView, Insight, Metric, ProjectOption, SessionList, SessionRow, SessionSource, Summary,
+  DayDetail, HeatmapResponse, HeatmapView, Insight, Metric, SessionList, SessionRow, SessionSource, Summary,
 } from '../shared/types.ts'
 import type { Db } from './db.ts'
+import { matchFor, searchSessions } from './search.ts'
 import { withPossessive } from '../shared/tr.ts'
 import { addDays, today, weekStart } from './time.ts'
 
@@ -39,10 +40,12 @@ export function defaultRange(view: HeatmapView): { from: string; to: string } {
 
 const PROJECT_ROWS = 10
 
-export function heatmap(db: Db, view: HeatmapView, metric: Metric, from: string, to: string): HeatmapResponse {
+export function heatmap(db: Db, view: HeatmapView, metric: Metric, from: string, to: string, project: string | null = null): HeatmapResponse {
   const agg = metric === 'sessions' ? 'COUNT(DISTINCT f.session_id)' : 'SUM(f.v)'
-  const facts = FACTS[metric]
-  const params = { $from: from, $to: to }
+  const scope = project ? ' AND session_id IN (SELECT id FROM sessions WHERE project_key = $project)' : ''
+  const facts = FACTS[metric].replaceAll('day BETWEEN $from AND $to', `day BETWEEN $from AND $to${scope}`)
+  const params: Record<string, string> = { $from: from, $to: to }
+  if (project) params.$project = project
   let cells: { key: string; value: number }[]
   let projects: HeatmapResponse['projects'] = []
 
@@ -175,18 +178,38 @@ export function sessions(db: Db, query: SessionQuery = {}): SessionList {
     where.push('s.project_key = $project')
     params.$project = query.project
   }
-  if (query.q?.trim()) {
-    params.$q = `%${query.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
-    where.push(`(${TITLE} LIKE $q ESCAPE '\\' OR EXISTS (SELECT 1 FROM prompts p WHERE p.session_id = s.id AND p.preview LIKE $q ESCAPE '\\'))`)
-  }
   if (query.source === 'cli') where.push("s.entrypoint = 'cli' AND d.cli_session_id IS NULL")
   else if (query.source === 'desktop') where.push("(d.cli_session_id IS NOT NULL OR s.entrypoint LIKE '%desktop%')")
-  const from = `FROM sessions s LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id WHERE ${where.join(' AND ')}`
-  const total = n((db.prepare(`SELECT count(*) AS c ${from}`).get(params) as Row).c)
-  const ids = (db
-    .prepare(`SELECT s.id ${from} ORDER BY s.last_ts DESC LIMIT $limit OFFSET $offset`)
-    .all({ ...params, $limit: Math.min(query.limit ?? 50, 200), $offset: query.offset ?? 0 }) as { id: string }[]).map((r) => r.id)
-  return { rows: sessionRows(db, ids), total }
+  const limit = Math.min(query.limit ?? 50, 200)
+  const offset = query.offset ?? 0
+  const q = query.q?.trim()
+
+  if (!q) {
+    const from = `FROM sessions s LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id WHERE ${where.join(' AND ')}`
+    const total = n((db.prepare(`SELECT count(*) AS c ${from}`).get(params) as Row).c)
+    const ids = (db
+      .prepare(`SELECT s.id ${from} ORDER BY s.last_ts DESC LIMIT $limit OFFSET $offset`)
+      .all({ ...params, $limit: limit, $offset: offset }) as { id: string }[]).map((r) => r.id)
+    return { rows: sessionRows(db, ids), total }
+  }
+
+  // Title matches come first, then sessions ranked by their best full-text match.
+  const hits = searchSessions(db, q)
+  params.$like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+  const titled = (db.prepare(`SELECT s.id FROM sessions s LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id
+      WHERE ${where.join(' AND ')} AND ${TITLE} LIKE $like ESCAPE '\\' ORDER BY s.last_ts DESC`).all(params) as { id: string }[]).map((r) => r.id)
+  delete params.$like
+  const allowed = new Set(
+    (db.prepare(`SELECT s.id FROM sessions s LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id
+        WHERE ${where.join(' AND ')} AND s.id IN (SELECT value FROM json_each($ids))`).all({ ...params, $ids: JSON.stringify(hits.order) }) as { id: string }[]).map((r) => r.id),
+  )
+  const ordered = [...new Set([...titled, ...hits.order.filter((id) => allowed.has(id))])]
+  const page = ordered.slice(offset, offset + limit)
+  const rows = sessionRows(db, page).map((row) => {
+    const h = hits.bySession.get(row.id)
+    return { ...row, match: h ? matchFor(db, q, h.bestId, h.hits) : null }
+  })
+  return { rows, total: ordered.length }
 }
 
 export function session(db: Db, id: string): SessionRow | null {
@@ -208,6 +231,8 @@ export function sessionRows(db: Db, ids: string[]): SessionRow[] {
         (SELECT group_concat(DISTINCT model) FROM api_calls WHERE session_id = s.id) AS models,
         (SELECT count(*) FROM tool_uses WHERE session_id = s.id AND name IS NOT NULL) AS tool_calls,
         (SELECT count(*) FROM tool_uses WHERE session_id = s.id AND is_error = 1 AND denied IS NULL) AS tool_errors,
+        (SELECT COALESCE(sum(added), 0) FROM file_edits WHERE session_id = s.id) AS lines_added,
+        (SELECT COALESCE(sum(removed), 0) FROM file_edits WHERE session_id = s.id) AS lines_removed,
         (SELECT url FROM prs WHERE session_id = s.id ORDER BY ts DESC LIMIT 1) AS pr_url,
         (SELECT number FROM prs WHERE session_id = s.id ORDER BY ts DESC LIMIT 1) AS pr_number
       FROM sessions s LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id
@@ -240,7 +265,6 @@ export function sessionRows(db: Db, ids: string[]): SessionRow[] {
     // Forked sessions copy their parent's counter without owning any calls; skip those runs.
     const own = (runsBySession.get(id) ?? []).filter((x) => n(x.run_calls) > 0)
     const latest = own.at(-1)
-    const coversWhole = own.length > 0 && n(own[0]?.start_time) <= n(r.first_ts)
     out.push({
       id,
       title: String(r.title),
@@ -259,8 +283,8 @@ export function sessionRows(db: Db, ids: string[]): SessionRow[] {
       costEstimate: n(r.cost),
       counter: latest ? { cost: n(latest.total_cost), since: n(latest.start_time), transcriptCost: n(latest.run_cost) } : null,
       costHidden: own.reduce((s, x) => s + Math.max(0, n(x.total_cost) - n(x.run_cost)), 0),
-      linesAdded: coversWhole ? own.reduce((s, x) => s + n(x.lines_added), 0) : null,
-      linesRemoved: coversWhole ? own.reduce((s, x) => s + n(x.lines_removed), 0) : null,
+      linesAdded: n(r.lines_added),
+      linesRemoved: n(r.lines_removed),
       prUrl: (r.pr_url as string | null) ?? null,
       prNumber: (r.pr_number as number | null) ?? null,
       models: r.models ? String(r.models).split(',').sort() : [],
@@ -273,13 +297,6 @@ export function sessionRows(db: Db, ids: string[]): SessionRow[] {
 /** A detached checkout reports "HEAD", which names no branch. */
 function branchName(b: string | null): string | null {
   return b && b !== 'HEAD' ? b : null
-}
-
-export function projects(db: Db): ProjectOption[] {
-  return all(db, `SELECT project_key AS key, project_name AS name, count(*) AS sessions FROM sessions
-    WHERE first_ts IS NOT NULL AND project_key IS NOT NULL GROUP BY project_key ORDER BY max(last_ts) DESC`).map((r) => ({
-    key: String(r.key), name: String(r.name), sessions: n(r.sessions),
-  }))
 }
 
 const pct = (x: number) => `%${Math.round(x * 100)}`

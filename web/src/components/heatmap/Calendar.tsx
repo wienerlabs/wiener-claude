@@ -7,12 +7,14 @@ const ROW_LABELS = ['Pzt', '', 'Çar', '', 'Cum', '', '']
 
 interface Props {
   data: HeatmapResponse
-  selected: string | null
-  onSelect: (day: string | null) => void
+  selected?: string | null
+  /** Without it the cells only show their tooltip. */
+  onSelect?: (day: string | null) => void
+  hint?: string
 }
 
 /** A year of days: one column per week (Monday first), one cell per day. */
-export function Calendar({ data, selected, onSelect }: Props) {
+export function Calendar({ data, selected = null, onSelect, hint = 'Bir güne tıkla, o günün oturumları açılsın.' }: Props) {
   const { box, show, hide, node } = useTooltip()
   const scroller = useRef<HTMLDivElement>(null)
 
@@ -65,7 +67,7 @@ export function Calendar({ data, selected, onSelect }: Props) {
                     <button
                       key={d.key}
                       type="button"
-                      className="heat-cell aspect-square w-full cursor-pointer"
+                      className={onSelect ? 'heat-cell aspect-square w-full cursor-pointer' : 'heat-cell aspect-square w-full cursor-default'}
                       style={{ background: HEAT[levelOf(d.value, t)] }}
                       aria-label={`${tip.label}: ${tip.value}`}
                       aria-pressed={selected === d.key}
@@ -74,7 +76,7 @@ export function Calendar({ data, selected, onSelect }: Props) {
                       onBlur={hide}
                       onClick={() => {
                         hide()
-                        onSelect(selected === d.key ? null : d.key)
+                        onSelect?.(selected === d.key ? null : d.key)
                       }}
                     />
                   )
@@ -86,7 +88,7 @@ export function Calendar({ data, selected, onSelect }: Props) {
       </div>
       {node}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[12px] text-ink-3">Bir güne tıkla, o günün oturumları açılsın.</span>
+        <span className="text-[12px] text-ink-3">{hint}</span>
         <Legend metric={data.metric} t={t} max={data.max} />
       </div>
     </div>

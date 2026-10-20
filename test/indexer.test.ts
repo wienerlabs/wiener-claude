@@ -163,7 +163,8 @@ describe('queries', () => {
     expect(row?.costEstimate).toBeCloseTo(20, 6)
     expect(row?.counter).toEqual({ cost: 25, since: start, transcriptCost: expect.closeTo(20, 6) })
     expect(row?.costHidden).toBeCloseTo(5, 6)
-    expect(row?.linesAdded).toBe(12)
+    // Changed lines come from the transcript's edits, not from the counter's per-run totals.
+    expect(row?.linesAdded).toBe(0)
     // The fork has a copied counter but no calls of its own, so it is not a listed session.
     expect(q.sessions(db).rows.map((r) => r.id)).toEqual(['s1'])
   })
@@ -190,7 +191,7 @@ describe('buildTurns', () => {
     ], new Pricing())
     expect(turns).toHaveLength(2)
     const [first] = turns
-    expect(first?.prompt).toEqual({ text: 'fix the test', kind: 'prompt', images: 0 })
+    expect(first?.prompt).toMatchObject({ text: 'fix the test', kind: 'prompt', images: 0 })
     expect(first?.items.map((i) => i.type)).toEqual(['text', 'tool', 'compact'])
     const tool = first?.items[1]
     expect(tool).toMatchObject({ type: 'tool', summary: 'npm test', result: { isError: true, text: 'FAIL' } })

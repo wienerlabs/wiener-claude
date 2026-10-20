@@ -77,8 +77,15 @@ interface Building extends ReplayTurn {
  * Groups a transcript into turns: one per prompt, holding everything Claude did until the next.
  * Records are fed one at a time so a large transcript never sits in memory whole.
  */
-export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish: () => ReplayTurn[] } {
+export interface BuiltTurns {
+  turns: ReplayTurn[]
+  /** Record uuid or tool id -> index of the turn it belongs to; used to open search hits. */
+  keyIndex: Map<string, number>
+}
+
+export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish: () => BuiltTurns } {
   const turns: Building[] = []
+  const keyIndex = new Map<string, number>()
   const tools = new Map<string, Extract<ReplayItem, { type: 'tool' }>>()
   let cwd: string | null = null
   let current: Building | null = null
@@ -92,6 +99,12 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
   }
 
   const add = (o: Json): void => {
+    place(o)
+    const uuid = str(o.uuid)
+    if (uuid && current) keyIndex.set(uuid, current.index)
+  }
+
+  const place = (o: Json): void => {
     const ts = parseTs(o.timestamp) ?? 0
     cwd = str(o.cwd) ?? cwd
     const m = obj(o.message)
@@ -113,7 +126,7 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
       } else if (isHumanPrompt(o, text)) {
         current = {
           index: turns.length, ts,
-          prompt: { text: clip(cleanPrompt(text), MAX_TEXT), kind: promptKind(text), images },
+          prompt: { text: clip(cleanPrompt(text), MAX_TEXT), kind: promptKind(text), images, key: str(o.uuid) ?? '' },
           items: [], cost: 0, outputTokens: 0, toolCalls: 0, errors: 0, usage: new Map(),
         }
         turns.push(current)
@@ -165,12 +178,14 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
             : u,
         })
       }
-      for (const b of Array.isArray(m.content) ? m.content : []) {
+      const blocks: unknown[] = Array.isArray(m.content) ? m.content : []
+      for (const [i, b] of blocks.entries()) {
         const block = obj(b)
         if (!block) continue
         if (block.type === 'text') {
           const text = str(block.text)?.trim()
-          if (text) turn.items.push({ type: 'text', ts, text: clip(text, MAX_TEXT) })
+          // Same key the search index uses for this block.
+          if (text) turn.items.push({ type: 'text', ts, text: clip(text, MAX_TEXT), key: `${str(o.uuid) ?? ''}:${i}` })
         } else if (block.type === 'thinking') {
           const text = str(block.thinking)?.trim()
           if (text) turn.items.push({ type: 'thinking', ts, text: clip(text, MAX_TEXT), durationMs: num(o.thinkingDurationMs) || null })
@@ -186,6 +201,7 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
             result: null,
           }
           tools.set(id, item)
+          keyIndex.set(id, turn.index)
           turn.items.push(item)
           turn.toolCalls++
         }
@@ -203,8 +219,9 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
     }
   }
 
-  const finish = (): ReplayTurn[] =>
-    turns.map(({ usage, ...turn }) => {
+  const finish = (): BuiltTurns => ({
+    keyIndex,
+    turns: turns.map(({ usage, ...turn }) => {
       let cost = 0
       let outputTokens = 0
       for (const { model, u } of usage.values()) {
@@ -212,7 +229,8 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
         outputTokens += u.output
       }
       return { ...turn, cost, outputTokens }
-    })
+    }),
+  })
 
   return { add, finish }
 }
@@ -220,14 +238,14 @@ export function turnBuilder(pricing: Pricing): { add: (o: Json) => void; finish:
 export function buildTurns(records: Json[], pricing: Pricing): ReplayTurn[] {
   const b = turnBuilder(pricing)
   for (const o of records) b.add(o)
-  return b.finish()
+  return b.finish().turns
 }
 
-const cache = new Map<string, ReplayTurn[]>()
+const cache = new Map<string, BuiltTurns>()
 const CACHE_SIZE = 3
 
 /** Turns of a transcript file, cached by path, size and modification time. */
-export async function turnsOf(file: string, pricing: Pricing): Promise<ReplayTurn[]> {
+export async function turnsOf(file: string, pricing: Pricing): Promise<BuiltTurns> {
   const st = await fs.stat(file)
   const key = `${file}:${st.size}:${st.mtimeMs}:${pricing.version}`
   const hit = cache.get(key)
@@ -245,9 +263,9 @@ export async function turnsOf(file: string, pricing: Pricing): Promise<ReplayTur
       // Skip a malformed line.
     }
   })
-  const turns = builder.finish()
+  const built = builder.finish()
   for (const k of cache.keys()) if (k.startsWith(`${file}:`)) cache.delete(k)
-  cache.set(key, turns)
+  cache.set(key, built)
   while (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value as string)
-  return turns
+  return built
 }
