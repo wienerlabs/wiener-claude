@@ -40,7 +40,7 @@ Bir yıllık takvim, haftanın günü × saat ve proje × gün ısı haritaları
 
 ### Oturumlar ve arama
 
-<img alt="Oturum dökümü: prompt'lar, Claude'un yanıtları ve araç çağrıları sırasıyla" src="https://raw.githubusercontent.com/wienerlabs/wiener-claude/main/docs/images/session.png" />
+<img alt="Oturum dökümü: Linear kaydından kırmızı teste, düzeltmeden özete her adım" src="https://raw.githubusercontent.com/wienerlabs/wiener-claude/main/docs/images/session.png" />
 
 Her oturumun tur tur dökümü: prompt'lar, yanıtlar, araç çağrıları ve sonuçları, hatalar, compact'ler. Tam metin arama bütün prompt'larda, yanıtlarda ve shell komutlarında çalışır; Türkçe karakter olmadan yazılan aramayı da bulur ("degisiklik" → "değişiklik"). Bir sonuca tıklamak dökümü o mesajda açar. Oturum sayfası Claude Code'un kendi maliyet sayacını dökümle karşılaştırır ve aradaki farkı ayrıca gösterir.
 
@@ -168,7 +168,7 @@ npm run build:demo                              # dist/demo-site
 npx vite preview --outDir ../dist/demo-site
 ```
 
-Site Vercel'de yayınlanır; ayarlar `vercel.json` dosyasındadır. Demo verisi derlendiği güne göre üretilir; `.github/workflows/demo-refresh.yml`, `VERCEL_DEPLOY_HOOK` secret'ı tanımlıysa her gün yeniden derletir.
+Site Vercel'de yayınlanır; ayarlar `vercel.json` dosyasındadır. Demo verisi derlendiği ana göre üretilir; `.github/workflows/demo-refresh.yml`, `VERCEL_DEPLOY_HOOK` secret'ı tanımlıysa mesai saatlerinde iki saatte bir yeniden derletir. Ekran görüntüleri için saat sabitlenebilir: `DEMO_NOW=2026-10-21T16:20:00+03:00 npm run build:demo`.
 
 ## Geliştirme
 

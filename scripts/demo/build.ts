@@ -9,6 +9,25 @@ import path from 'node:path'
 import { demoFile } from '../../shared/demo.ts'
 
 const OUT = path.resolve(process.argv[2] ?? 'dist/demo-site')
+
+/**
+ * DEMO_NOW pins the demo's clock (for screenshots and the video): every "now" in the generator
+ * and the server code reads the shifted time. Unset, the demo is built for the current moment.
+ */
+function shiftClock(to: number): void {
+  const RealDate = Date
+  const offset = to - RealDate.now()
+  class Shifted extends RealDate {
+    constructor(...args: unknown[]) {
+      if (args.length === 0) super(RealDate.now() + offset)
+      else super(...(args as [string | number | Date]))
+    }
+    static override now(): number {
+      return RealDate.now() + offset
+    }
+  }
+  globalThis.Date = Shifted as DateConstructor
+}
 /** What the demo's home folder is called in everything the visitor sees. */
 const PUBLIC_HOME = '/Users/demo'
 const RANGES = ['week', '30d', 'all'] as const
@@ -19,6 +38,11 @@ async function main(): Promise<void> {
 
   // The demo's clock runs on Turkish time, and every path below points at the made-up home.
   process.env.TZ = 'Europe/Istanbul'
+  if (process.env.DEMO_NOW) {
+    const at = Date.parse(process.env.DEMO_NOW)
+    if (Number.isNaN(at)) throw new Error(`DEMO_NOW okunamadı: ${process.env.DEMO_NOW}`)
+    shiftClock(at)
+  }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wiener-demo-'))
   const home = path.join(tmp, 'demo')
   process.env.HOME = home
@@ -35,7 +59,7 @@ async function main(): Promise<void> {
 
   generateDemoHome({ home, now: new Date() })
   fs.mkdirSync(process.env.WIENER_DATA_DIR, { recursive: true })
-  fs.writeFileSync(path.join(process.env.WIENER_DATA_DIR, 'settings.json'), JSON.stringify({ monthlyBudget: 600 }))
+  fs.writeFileSync(path.join(process.env.WIENER_DATA_DIR, 'settings.json'), JSON.stringify({ monthlyBudget: 80 }))
 
   const db = openDb(':memory:')
   const pricing = new Pricing()

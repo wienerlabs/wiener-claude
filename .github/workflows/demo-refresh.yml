@@ -1,10 +1,11 @@
-# The demo's data is generated relative to the day it is built. A daily redeploy keeps "today"
+# The demo's data is generated relative to the moment it is built: "today", the sessions running
+# right now. Rebuilding every two hours through the Turkish working day (10:00 to 20:00) keeps that
 # current. Needs a Vercel deploy hook URL in the VERCEL_DEPLOY_HOOK secret; without it, this skips.
 name: Demo verisini tazele
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 7-17/2 * * *'
   workflow_dispatch:
 
 jobs:

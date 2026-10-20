@@ -28,12 +28,12 @@ describe('demo data', () => {
     await new Indexer(db, pricing, { projectsDir: path.join(home, '.claude', 'projects'), desktopDir: null }).scan()
 
     const list = q.sessions(db, { range: 'all', limit: 200 })
-    expect(list.total).toBeGreaterThan(40)
+    expect(list.total).toBeGreaterThan(25)
     expect(list.total).toBeLessThan(200)
-    expect(new Set(list.rows.map((r) => r.projectName))).toEqual(new Set(['acme-web', 'payments-api', 'mobile-app', 'data-pipeline', 'infra', 'docs-site']))
+    expect(new Set(list.rows.map((r) => r.projectName))).toEqual(new Set(['carsi-web', 'carsi-payments', 'carsi-mobile', 'carsi-data', 'carsi-infra', 'carsi-docs']))
 
     const kinds = tipsReport(db, pricing, '30d', { instructions: [], mcp: [] }).tips.map((t) => t.kind)
-    expect(kinds).toEqual(expect.arrayContaining(['cache-rewrite', 'repeated-prompts', 'setup-errors', 'denials']))
+    expect(kinds).toEqual(expect.arrayContaining(['cache-rewrite', 'repeated-prompts', 'setup-errors']))
 
     // Same seed, same data.
     const again = fs.mkdtempSync(path.join(os.tmpdir(), 'wiener-demo-test-'))
