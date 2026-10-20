@@ -77,27 +77,33 @@ export interface ApiState<T> {
   data: T | null
   error: string | null
   loading: boolean
+  /** True while `data` still belongs to the previous path (only with `keepPrevious`). */
+  stale: boolean
 }
 
 /**
- * Fetches `path` and refetches when it changes or the index updates. Keeps showing the previous
- * data while a refetch is in flight, so live updates never flash a loading state.
+ * Fetches `path` and refetches when it changes or the index updates. A live update keeps the data
+ * on screen while it refetches. With `keepPrevious`, so does a new path (a filter change): the old
+ * result stays, marked stale, until the new one arrives, instead of dropping back to a skeleton.
  */
-export function useApi<T>(path: string | null): ApiState<T> {
+export function useApi<T>(path: string | null, opts: { keepPrevious?: boolean } = {}): ApiState<T> {
   const v = useDataVersion()
-  const [state, setState] = useState<ApiState<T> & { path: string | null }>({ data: null, error: null, loading: true, path })
+  const [state, setState] = useState<Omit<ApiState<T>, 'stale'> & { path: string | null }>({ data: null, error: null, loading: true, path })
   useEffect(() => {
     if (!path) return
     const ctrl = new AbortController()
-    setState((s) => ({ ...s, loading: true, ...(s.path !== path ? { data: null, error: null, path } : {}) }))
+    setState((s) => ({ ...s, loading: true, ...(s.path !== path && !opts.keepPrevious ? { data: null, error: null, path } : {}) }))
     getJson<T>(path, ctrl.signal).then(
       (data) => setState({ data, error: null, loading: false, path }),
       (err: unknown) => {
         if (ctrl.signal.aborted) return
-        setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err), loading: false }))
+        setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err), loading: false, path }))
       },
     )
     return () => ctrl.abort()
-  }, [path, v])
-  return state.path === path ? state : { data: null, error: null, loading: true }
+  }, [path, v, opts.keepPrevious])
+  if (state.path === path) return { ...state, stale: false }
+  return opts.keepPrevious && state.data !== null
+    ? { data: state.data, error: null, loading: true, stale: true }
+    : { data: null, error: null, loading: true, stale: false }
 }

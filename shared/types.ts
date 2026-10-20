@@ -1,6 +1,16 @@
 // API contract shared by the server and the web UI.
 
 export type Metric = 'messages' | 'tokens' | 'cost' | 'sessions' | 'errors'
+
+/** Time filter shared by the screens: this week (from Monday), the last 30 days, or everything. */
+export type RangeKey = 'week' | '30d' | 'all'
+
+export interface RangeInfo {
+  key: RangeKey
+  from: string
+  to: string
+  days: number
+}
 export type HeatmapView = 'calendar' | 'weekhour' | 'project'
 
 export interface IndexStatus {
@@ -13,8 +23,26 @@ export interface IndexStatus {
   lastScanMs: number | null
 }
 
+/** Tokens by kind. Cache reads are the context Claude re-reads on every request. */
+export interface TokenTotals {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+}
+
+export interface PeriodTotals extends TokenTotals {
+  key: RangeKey
+  from: string
+  to: string
+  messages: number
+  cost: number
+}
+
 export interface Summary {
   today: { messages: number; yesterdayMessages: number }
+  /** This week, the last 30 days and all time, side by side. */
+  periods: PeriodTotals[]
   week: { cost: number; lastWeekCost: number }
   live: LiveSession[]
   streak: { current: number; longest: number; activeToday: boolean }
@@ -42,6 +70,9 @@ export interface HeatmapResponse {
   metric: Metric
   from: string
   to: string
+  /** Project view only: one column per day, or per week (keyed by Monday) for long ranges. */
+  columns: string[]
+  bucket: 'day' | 'week'
   cells: HeatmapCell[]
   max: number
   total: number
@@ -225,12 +256,22 @@ export interface Budget {
 }
 
 export interface CostReport {
-  month: { from: string; to: string; cost: number; projected: number; lastMonth: number; lastMonthToDate: number; hidden: number }
-  budget: Budget | null
+  range: RangeInfo
+  /** Spend in the range, and in the period it is compared with (null for "all"). */
+  total: number
+  previous: number | null
+  /** Counter excess over the transcripts for runs that started in the range. */
+  hidden: number
   cacheSavings: number
-  daily: DailyCost[]
+  /** Per day, or per week (keyed by Monday) for long ranges. */
+  series: { bucket: 'day' | 'week'; points: DailyCost[] }
+  /** The calendar month, for the projection and the budget, whatever range is selected. */
+  month: { from: string; to: string; cost: number; projected: number; lastMonth: number; lastMonthToDate: number }
+  budget: Budget | null
   models: ModelCost[]
   mix: CostMix
+  /** Token counts behind the mix, for the same range. */
+  tokens: TokenTotals
   projects: { key: string; name: string; cost: number }[]
   suggestions: Suggestion[]
   limits: Limits
@@ -240,14 +281,18 @@ export interface ProjectSummary {
   key: string
   name: string
   path: string | null
+  /** All-time totals. */
   sessions: number
+  cost: number
   firstTs: number
   lastTs: number
-  cost: number
-  cost30: number
-  messages30: number
+  /** Numbers for the selected range. */
+  rangeSessions: number
+  rangeCost: number
+  rangeMessages: number
   /** Messages per day for the last 12 weeks, oldest first. */
   strip: number[]
+  /** Most edited files in the range. */
   topFiles: string[]
 }
 
@@ -260,7 +305,9 @@ export interface ProjectFile {
   sessions: number
 }
 
+/** Everything below the summary is for the selected range. */
 export interface ProjectDetail extends ProjectSummary {
+  range: RangeInfo
   prompts: number
   messages: number
   toolCalls: number

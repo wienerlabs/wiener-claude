@@ -40,7 +40,7 @@ export class Indexer {
   status: IndexStatus = { state: 'indexing', filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0, lastScanAt: null, lastScanMs: null }
   private running: Promise<boolean> | null = null
   private again = false
-  private desktopSignature = ''
+  private desktopFiles = new Map<string, { mtime: number; key: string; shown: string }>()
   private readonly db: Db
   private readonly pricing: Pricing
   private readonly opts: IndexerOptions
@@ -79,15 +79,12 @@ export class Indexer {
     let changed = this.refreshCosts()
 
     const found = await discover(this.opts.projectsDir)
+    const stats = await Promise.all(found.map((f) => fs.stat(f.path).catch(() => null)))
     const work: { file: FoundFile; row: FileRow; size: number; mtimeMs: number; ino: number }[] = []
     let truncated = false
-    for (const file of found) {
-      let st
-      try {
-        st = await fs.stat(file.path)
-      } catch {
-        continue
-      }
+    for (const [i, file] of found.entries()) {
+      const st = stats[i]
+      if (!st) continue
       let row = this.st.fileByPath.get(file.path) as FileRow | undefined
       if (!row) {
         const { id } = this.st.insertFile.get(file.path, file.sessionId, file.isSubagent ? 1 : 0) as { id: number }
@@ -101,7 +98,7 @@ export class Indexer {
     if (truncated) {
       // A file was rewritten in place. Rare enough that rebuilding beats untangling it.
       clearIndex(this.db)
-      this.desktopSignature = ''
+      this.desktopFiles = new Map()
       return this.scanOnce().then(() => true)
     }
 
@@ -296,23 +293,32 @@ export class Indexer {
     return rows.length > 0
   }
 
-  /** Mirrors the desktop app's session files. They are small, so a change rereads them all. */
+  /**
+   * Mirrors the desktop app's session files. Only files whose mtime moved are reread, and a change
+   * is reported only when a field the panel shows changed: these files are rewritten on every
+   * message just to bump their activity time.
+   */
   private async scanDesktop(): Promise<boolean> {
     const dir = this.opts.desktopDir
     if (!dir) return false
     const files = await findFiles(dir, 3, (name) => name.startsWith('local_') && name.endsWith('.json'))
-    const stats = await Promise.all(files.map((f) => fs.stat(f).then((s) => `${f}:${s.mtimeMs}`, () => '')))
-    const signature = stats.sort().join('|')
-    if (signature === this.desktopSignature) return false
-    this.desktopSignature = signature
-
-    const rows: unknown[][] = []
-    for (const f of files) {
+    const stats = await Promise.all(files.map((f) => fs.stat(f).then((s) => s.mtimeMs, () => null)))
+    let changed = false
+    const upserts: (string | number | null)[][] = []
+    const removed: string[] = []
+    const seen = new Set<string>()
+    for (const [i, f] of files.entries()) {
+      const mtime = stats[i]
+      if (mtime == null) continue
+      seen.add(f)
+      const prev = this.desktopFiles.get(f)
+      if (prev && prev.mtime === mtime) continue
+      let row: (string | number | null)[]
       try {
         const o = JSON.parse(await fs.readFile(f, 'utf8')) as Record<string, unknown>
         const cli = typeof o.cliSessionId === 'string' ? o.cliSessionId : null
         if (!cli) continue
-        rows.push([
+        row = [
           cli,
           typeof o.sessionId === 'string' ? o.sessionId : null,
           typeof o.title === 'string' ? o.title : null,
@@ -323,19 +329,28 @@ export class Indexer {
           parseTs(o.lastActivityAt),
           typeof o.model === 'string' ? o.model : null,
           typeof o.cwd === 'string' ? o.cwd : null,
-        ])
+        ]
       } catch {
-        // A half-written file; the next change event rereads it.
+        continue // A half-written file; the next change event rereads it.
       }
+      const shown = JSON.stringify(row.filter((_, k) => k !== 7))
+      if (!prev || prev.shown !== shown) changed = true
+      this.desktopFiles.set(f, { mtime, key: String(row[0]), shown })
+      upserts.push(row)
     }
-    const insert = this.db.prepare(`INSERT OR REPLACE INTO desktop_sessions
-      (cli_session_id, desktop_id, title, branch, worktree_name, archived, created_at, last_activity_at, model, cwd)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    transaction(this.db, () => {
-      this.db.exec('DELETE FROM desktop_sessions')
-      for (const r of rows) insert.run(...(r as (string | number | null)[]))
-    })
-    return true
+    for (const [f, info] of this.desktopFiles) {
+      if (seen.has(f)) continue
+      this.desktopFiles.delete(f)
+      removed.push(info.key)
+      changed = true
+    }
+    if (upserts.length || removed.length) {
+      transaction(this.db, () => {
+        for (const r of upserts) this.st.upsertDesktop.run(...r)
+        for (const key of removed) this.st.deleteDesktop.run(key)
+      })
+    }
+    return changed
   }
 }
 
@@ -410,6 +425,10 @@ function statements(db: Db) {
     insertEdit: p(`INSERT OR IGNORE INTO file_edits (key, session_id, ts, day, path, tool, added, removed)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
     insertLimitHit: p('INSERT OR IGNORE INTO limit_hits (uuid, session_id, ts, kind, resets_at) VALUES (?, ?, ?, ?, ?)'),
+    upsertDesktop: p(`INSERT OR REPLACE INTO desktop_sessions
+      (cli_session_id, desktop_id, title, branch, worktree_name, archived, created_at, last_activity_at, model, cwd)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+    deleteDesktop: p('DELETE FROM desktop_sessions WHERE cli_session_id = ?'),
     insertPr: p(`INSERT INTO prs (url, session_id, number, repo, ts) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(url) DO UPDATE SET number = excluded.number, repo = excluded.repo`),
   }
@@ -433,20 +452,40 @@ function mergeApi(a: ApiFact, b: ApiFact): ApiFact {
 
 /**
  * Session files live at projects/<slug>/<session>.jsonl. Subagent transcripts live below
- * projects/<slug>/<session>/, at any depth, and belong to that session.
+ * projects/<slug>/<session>/subagents/, at any depth, and belong to that session. Nothing else in
+ * a session folder (tool results, attachments) is walked: a scan runs every few seconds.
  */
 export async function discover(root: string): Promise<FoundFile[]> {
-  const files = await findFiles(root, 6, (name) => name.endsWith('.jsonl'))
-  const out: FoundFile[] = []
-  for (const f of files) {
-    const parts = path.relative(root, f).split(path.sep)
-    if (parts.length < 2) continue
-    const slug = parts[0] as string
-    if (parts.length === 2) out.push({ path: f, slug, sessionId: path.basename(f, '.jsonl'), isSubagent: false })
-    else out.push({ path: f, slug, sessionId: parts[1] as string, isSubagent: true })
-  }
+  const slugs = (await readDir(root)).filter((e) => e.isDirectory())
+  const perSlug = await Promise.all(
+    slugs.map(async (slug) => {
+      const dir = path.join(root, slug.name)
+      const out: FoundFile[] = []
+      const entries = await readDir(dir)
+      for (const e of entries) {
+        if (e.isFile() && e.name.endsWith('.jsonl')) {
+          out.push({ path: path.join(dir, e.name), slug: slug.name, sessionId: path.basename(e.name, '.jsonl'), isSubagent: false })
+        }
+      }
+      const subagents = await Promise.all(
+        entries.filter((e) => e.isDirectory()).map((e) => findFiles(path.join(dir, e.name, 'subagents'), 3, (n) => n.endsWith('.jsonl')).then((fs) => ({ session: e.name, fs }))),
+      )
+      for (const { session, fs: files } of subagents) {
+        for (const f of files) out.push({ path: f, slug: slug.name, sessionId: session, isSubagent: true })
+      }
+      return out
+    }),
+  )
   // Main files first, so sessions exist before their subagents report in.
-  return out.sort((a, b) => Number(a.isSubagent) - Number(b.isSubagent))
+  return perSlug.flat().sort((a, b) => Number(a.isSubagent) - Number(b.isSubagent))
+}
+
+async function readDir(dir: string) {
+  try {
+    return await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
 }
 
 async function findFiles(dir: string, depth: number, match: (name: string) => boolean): Promise<string[]> {

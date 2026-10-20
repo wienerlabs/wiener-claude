@@ -206,11 +206,13 @@ describe('cost report and projects', () => {
     const r = costReport(db, pricing, null)
     expect(r.models.map((m) => m.model)).toEqual(['claude-opus-5-5', 'claude-haiku-4-5'])
     const mix = r.mix.input + r.mix.output + r.mix.cacheRead + r.mix.cacheWrite
-    expect(mix).toBeCloseTo(r.month.cost, 9)
+    expect(mix).toBeCloseTo(r.total, 9)
     // Cache reads saved the difference between the input and cache-read price.
     expect(r.cacheSavings).toBeCloseTo((50_000 * (4 - 0.2)) / 1e6, 9)
-    expect(r.daily).toHaveLength(30)
-    expect(r.daily.at(-1)?.cost).toBeCloseTo(r.month.cost, 9)
+    // Default range is the last 30 days: one bar per day, today's bar holds today's spend.
+    expect(r.series).toMatchObject({ bucket: 'day' })
+    expect(r.series.points).toHaveLength(30)
+    expect(r.series.points.at(-1)?.cost).toBeCloseTo(r.total, 9)
   })
 
   it('lists projects with their most edited files, merging worktree copies', async () => {

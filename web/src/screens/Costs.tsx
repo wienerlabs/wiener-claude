@@ -1,14 +1,22 @@
 import { CircleGauge, Info, PiggyBank } from 'lucide-react'
 import { useState } from 'react'
 import { withPossessive } from '../../../shared/tr.ts'
-import type { CostReport, LimitHit, Limits } from '../../../shared/types.ts'
+import type { CostReport, LimitHit, Limits, RangeKey } from '../../../shared/types.ts'
 import { DailyBars, HBars, ShareBar } from '../components/charts.tsx'
 import { Card, CardHeader, ErrorNote, Skeleton, cx } from '../components/ui.tsx'
 import { refreshNow, useApi } from '../lib/api.ts'
-import { fmtDateTime, fmtDayShort, fmtDuration, fmtInt, fmtRelative, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
+import { fmtCompact, fmtDateTime, fmtDayLong, fmtDayShort, fmtDuration, fmtInt, fmtRelative, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
+import { RangePicker, rangeSpan, useRange } from '../lib/range.tsx'
+
+const PERIOD: Record<RangeKey, { label: string; lower: string; compare: string }> = {
+  week: { label: 'Bu hafta', lower: 'bu hafta', compare: 'geçen haftanın aynı günlerine göre' },
+  '30d': { label: 'Son 30 gün', lower: 'son 30 gün', compare: 'önceki 30 güne göre' },
+  all: { label: 'Tüm zamanlar', lower: 'tüm zamanlar', compare: '' },
+}
 
 export function Costs() {
-  const { data, error } = useApi<CostReport>('/api/costs')
+  const [range, setRange] = useRange('30d')
+  const { data, error, stale } = useApi<CostReport>(`/api/costs?range=${range}`, { keepPrevious: true })
   if (error) return <div className="mx-auto max-w-[1180px]"><ErrorNote message={error} /></div>
   if (!data) {
     return (
@@ -20,30 +28,38 @@ export function Costs() {
     )
   }
   const m = data.month
-  const day = Number(m.to.slice(8, 10))
-  const vsLast = m.lastMonthToDate > 0 ? Math.round(((m.cost - m.lastMonthToDate) / m.lastMonthToDate) * 100) : null
+  const period = PERIOD[data.range.key]
+  const delta = data.previous !== null && data.previous > 0 ? Math.round(((data.total - data.previous) / data.previous) * 100) : null
+  const deltaText = delta === null ? null : `${period.compare} ${delta >= 0 ? '+' : '−'}%${Math.abs(delta)}`
 
   return (
-    <div className="mx-auto max-w-[1180px] space-y-6">
+    <div className={cx('mx-auto max-w-[1180px] space-y-6 transition-opacity', stale && 'opacity-60')} aria-busy={stale}>
       <header className="space-y-2">
-        <h1 className="font-display text-[34px] leading-[1.1] font-semibold tracking-[-0.03em] sm:text-[44px]">
-          <span className="text-ink-2">Bu ay </span>
-          <span className="num">{fmtUsd(m.cost)}</span>
-        </h1>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 className="font-display text-[34px] leading-[1.1] font-semibold tracking-[-0.03em] sm:text-[44px]">
+            <span className="text-ink-2">{rangeSpan(data.range.key)} </span>
+            <span className="num">{fmtUsd(data.total)}</span>
+          </h1>
+          <RangePicker value={range} onChange={setRange} />
+        </div>
         <p className="max-w-[72ch] text-[15px] text-ink-2">
-          Ayın {day}. günü. Bu hızla ay sonunda yaklaşık {fmtUsd(m.projected)}
-          {m.lastMonthToDate > 0 ? `; geçen ayın aynı döneminde ${fmtUsd(m.lastMonthToDate)} harcamıştın` : ''}.
+          {data.range.key === 'all' ? `İlk kayıt ${fmtDayLong(data.range.from)}. ` : deltaText ? `${capitalize(deltaText)}. ` : ''}
+          Bu ay şu ana kadar {fmtUsd(m.cost)}; bu hızla ay sonunda yaklaşık {fmtUsd(m.projected)}.
           {' '}Tutarlar liste fiyatıyla hesaplanır; abonelikte ödediğin ücret değil, kullanımının API karşılığıdır.
         </p>
       </header>
 
       <dl className="grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-surface lg:grid-cols-4">
-        <Stat label="Bu ay" value={fmtUsd(m.cost)} note={vsLast === null ? 'geçen ay kayıt yok' : `geçen aya göre ${vsLast >= 0 ? '+' : '−'}%${Math.abs(vsLast)}`} />
-        <Stat label="Ay sonu tahmini" value={fmtUsd(m.projected)} note={`geçen ay toplam ${fmtUsd(m.lastMonth)}`} className="border-l border-line" />
+        <Stat
+          label={period.label}
+          value={fmtUsd(data.total)}
+          note={deltaText ?? (data.range.key === 'all' ? `${fmtInt(data.range.days)} günlük kayıt` : 'karşılaştırılacak önceki kayıt yok')}
+        />
+        <Stat label="Ay sonu tahmini" value={fmtUsd(m.projected)} note={`bu ay şu ana kadar ${fmtUsd(m.cost)}`} className="border-l border-line" />
         <Stat label="Önbellek tasarrufu" value={fmtUsd(data.cacheSavings)} note="önbellek olmasaydı bu kadar fazla tutardı" className="border-t border-line lg:border-t-0 lg:border-l" />
         <Stat
           label="Dökümde görünmeyen"
-          value={fmtUsd(m.hidden)}
+          value={fmtUsd(data.hidden)}
           note="Claude Code sayacının dökümü aştığı kısım"
           className="border-t border-l border-line lg:border-t-0"
         />
@@ -52,23 +68,23 @@ export function Costs() {
       <BudgetCard report={data} />
 
       <Card>
-        <CardHeader title="Son 30 gün" aside="günlük tahmini maliyet" />
+        <CardHeader title={period.label} aside={data.series.bucket === 'week' ? 'haftalık tahmini maliyet' : 'günlük tahmini maliyet'} />
         <div className="px-5 pt-2 pb-4">
-          <DailyBars data={data.daily} />
+          <DailyBars data={data.series.points} bucket={data.series.bucket} />
         </div>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Para nereye gidiyor" aside="bu ay, token türüne göre" />
+          <CardHeader title="Para nereye gidiyor" aside={`${period.lower}, token türüne göre`} />
           <div className="px-5 pb-5">
             <ShareBar
               format={fmtUsd}
               parts={[
-                { label: 'Önbellekten okuma', value: data.mix.cacheRead, color: 'var(--cat-1)' },
-                { label: 'Önbelleğe yazma', value: data.mix.cacheWrite, color: 'var(--cat-2)' },
-                { label: 'Çıktı', value: data.mix.output, color: 'var(--cat-3)' },
-                { label: 'Girdi', value: data.mix.input, color: 'var(--cat-4)' },
+                { label: 'Önbellekten okuma', value: data.mix.cacheRead, color: 'var(--cat-1)', detail: data.tokens ? `${fmtCompact(data.tokens.cacheRead)} token` : undefined },
+                { label: 'Önbelleğe yazma', value: data.mix.cacheWrite, color: 'var(--cat-2)', detail: data.tokens ? `${fmtCompact(data.tokens.cacheWrite)} token` : undefined },
+                { label: 'Çıktı', value: data.mix.output, color: 'var(--cat-3)', detail: data.tokens ? `${fmtCompact(data.tokens.output)} token` : undefined },
+                { label: 'Girdi', value: data.mix.input, color: 'var(--cat-4)', detail: data.tokens ? `${fmtCompact(data.tokens.input)} token` : undefined },
               ]}
             />
             <p className="mt-4 text-[12px] text-ink-3">
@@ -77,7 +93,7 @@ export function Costs() {
           </div>
         </Card>
         <Card>
-          <CardHeader title="Model bazında" aside="bu ay" />
+          <CardHeader title="Model bazında" aside={period.lower} />
           <div className="px-5 pb-5">
             {data.models.length ? (
               <HBars
@@ -85,7 +101,7 @@ export function Costs() {
                 items={data.models.map((x) => ({ label: modelName(x.model), value: x.cost, note: `%${Math.round(x.share * 100)}` }))}
               />
             ) : (
-              <p className="text-ink-2">Bu ay kayıt yok.</p>
+              <p className="text-ink-2">Bu dönemde kayıt yok.</p>
             )}
           </div>
         </Card>
@@ -95,19 +111,19 @@ export function Costs() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Projeler" aside="bu ay en çok harcayanlar" />
+          <CardHeader title="Projeler" aside={`${period.lower}, en çok harcayanlar`} />
           <div className="px-5 pb-5">
             {data.projects.length ? (
               <HBars format={fmtUsd} items={data.projects.map((p) => ({ label: p.name, value: p.cost }))} />
             ) : (
-              <p className="text-ink-2">Bu ay kayıt yok.</p>
+              <p className="text-ink-2">Bu dönemde kayıt yok.</p>
             )}
           </div>
         </Card>
         <Card>
-          <CardHeader title="Tasarruf fırsatları" />
+          <CardHeader title="Tasarruf fırsatları" aside={period.lower} />
           <ul className="px-5 pb-4">
-            {data.suggestions.length === 0 ? <li className="py-2 text-ink-2">Bu ay belirgin bir tasarruf fırsatı görünmüyor.</li> : null}
+            {data.suggestions.length === 0 ? <li className="py-2 text-ink-2">Bu dönemde belirgin bir tasarruf fırsatı görünmüyor.</li> : null}
             {data.suggestions.map((s) => (
               <li key={s.text} className="flex gap-3 border-t border-line py-3 first:border-t-0">
                 <PiggyBank className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
@@ -121,6 +137,8 @@ export function Costs() {
     </div>
   )
 }
+
+const capitalize = (t: string) => t.charAt(0).toLocaleUpperCase('tr') + t.slice(1)
 
 function Stat({ label, value, note, className }: { label: string; value: string; note: string; className?: string }) {
   return (

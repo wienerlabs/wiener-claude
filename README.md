@@ -17,6 +17,8 @@ Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. `~/.c
 - **Bütçe:** aylık bir tutar belirlersen bu hızla hangi gün aşılacağı Maliyet'te ve Genel bakış'ta görünür.
 - **Ortam:** Claude Code'un hatırladıkları (memory), uyduğu talimatlar (`CLAUDE.md`), yarım kalan görevler ve onaya sunulan planlar, skill'ler, eklentiler, subagent türleri, MCP sunucuları ve ayarlar.
 - **İçgörüler:** "Bu hafta ne oldu" kartı bütçe temposunu, limit olaylarını, değişen satırları, yarım kalan görevleri ve araç hatalarını tek cümlelerle özetler; her biri ilgili ekrana bağlanır.
+- **Dönem özeti:** Genel bakış'ta bu hafta, son 30 gün ve tüm zamanlar yan yana: mesaj sayısı, toplam token ve türlerine göre dağılımı (önbellekten okuma, önbelleğe yazma, çıktı, girdi), tahmini maliyet.
+- **Dönem filtresi:** Maliyet, Projeler, Oturumlar ve Genel bakış'taki gün × saat ile proje × gün haritaları "Bu hafta", "Son 30 gün" ya da "Tüm zamanlar" için gösterilebilir; seçim adreste durur.
 - **Canlı:** dosyalar değiştikçe panel kendini günceller; açık oturumlar ayrıca listelenir.
 
 ## Kurulum ve kullanım

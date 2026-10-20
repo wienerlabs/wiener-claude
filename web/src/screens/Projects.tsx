@@ -1,44 +1,52 @@
 import { ArrowLeft, ArrowRight, FileCode2, GitPullRequest } from 'lucide-react'
 import { useState } from 'react'
-import type { HeatmapResponse, Metric, ProjectDetail, ProjectSummary } from '../../../shared/types.ts'
+import type { HeatmapResponse, Metric, ProjectDetail, ProjectSummary, RangeKey } from '../../../shared/types.ts'
 import { HBars, MiniStrip } from '../components/charts.tsx'
 import { Calendar } from '../components/heatmap/Calendar.tsx'
-import { Card, CardHeader, ErrorNote, Segmented, Skeleton } from '../components/ui.tsx'
+import { Card, CardHeader, ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
 import { METRIC_LABEL, fmtDateTime, fmtInt, fmtRelative, fmtUsd, modelName } from '../lib/format.ts'
+import { RangePicker, useRange } from '../lib/range.tsx'
 import { onLinkClick } from '../lib/router.ts'
 
-const projectHref = (key: string) => `/projeler/${encodeURIComponent(key)}`
+const RANGE_LOWER: Record<RangeKey, string> = { week: 'bu hafta', '30d': 'son 30 günde', all: 'toplam' }
+/** Links keep the selected range, so the detail page opens on the same period. */
+const withRange = (path: string, range: RangeKey) => (range === '30d' ? path : `${path}${path.includes('?') ? '&' : '?'}donem=${range === 'week' ? 'hafta' : 'tum'}`)
+const projectHref = (key: string, range: RangeKey) => withRange(`/projeler/${encodeURIComponent(key)}`, range)
 
 export function Projects({ selectedKey }: { selectedKey: string | null }) {
   return selectedKey ? <ProjectPage projectKey={selectedKey} /> : <ProjectList />
 }
 
 function ProjectList() {
-  const { data, error } = useApi<ProjectSummary[]>('/api/projects')
+  const [range, setRange] = useRange('30d')
+  const { data, error, stale } = useApi<ProjectSummary[]>(`/api/projects?range=${range}`, { keepPrevious: true })
   return (
     <div className="mx-auto max-w-[1180px] space-y-5">
-      <header>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
         <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">Projeler</h1>
         <p className="text-[14px] text-ink-2">Worktree'ler kendi repolarına sayılır. Klasör seçmeden açılan Desktop oturumları tek satırda toplanır.</p>
+        </div>
+        <RangePicker value={range} onChange={setRange} />
       </header>
       {error ? <ErrorNote message={error} /> : null}
       {!data && !error ? <div className="space-y-2">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : null}
-      {data?.length === 0 ? <p className="text-ink-2">Henüz bir proje yok.</p> : null}
+      {data?.length === 0 ? <p className="text-ink-2">{range === 'all' ? 'Henüz bir proje yok.' : 'Bu dönemde etkinliği olan proje yok.'}</p> : null}
       {data && data.length > 0 ? (
-        <ul className="overflow-hidden rounded-xl border border-line bg-surface">
+        <ul className={cx('overflow-hidden rounded-xl border border-line bg-surface transition-opacity', stale && 'opacity-60')} aria-busy={stale}>
           {data.map((p) => (
             <li key={p.key} className="border-t border-line first:border-t-0">
               <a
-                href={projectHref(p.key)}
-                onClick={(e) => onLinkClick(e, projectHref(p.key))}
+                href={projectHref(p.key, range)}
+                onClick={(e) => onLinkClick(e, projectHref(p.key, range))}
                 className="grid gap-x-6 gap-y-2 px-5 py-4 transition-colors hover:bg-raised sm:grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.3fr)_auto_minmax(0,1fr)]"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-[15px] font-medium">{p.name}</span>
                   <span className="block truncate font-mono text-[12px] text-ink-3">{p.path ? p.path.replace(/^\/Users\/[^/]+/, '~') : 'farklı klasörler'}</span>
                   <span className="mt-1 block text-[12px] text-ink-2 num">
-                    {p.sessions} oturum · son 30 günde {fmtInt(p.messages30)} mesaj, {fmtUsd(p.cost30)} · {fmtRelative(p.lastTs)}
+                    {RANGE_LOWER[range]} {fmtInt(range === 'all' ? p.sessions : p.rangeSessions)} oturum, {fmtInt(p.rangeMessages)} mesaj, {fmtUsd(p.rangeCost)} · son etkinlik {fmtRelative(p.lastTs)}
                   </span>
                 </span>
                 <span className="self-center">
@@ -67,28 +75,41 @@ function ProjectList() {
 const METRICS: Metric[] = ['messages', 'cost', 'tokens', 'sessions', 'errors']
 
 function ProjectPage({ projectKey }: { projectKey: string }) {
-  const { data, error } = useApi<ProjectDetail>(`/api/projects/${encodeURIComponent(projectKey)}`)
+  const [range, setRange] = useRange('30d')
+  // Keep the page on a range change; a different project starts clean.
+  const detail = useApi<ProjectDetail>(`/api/projects/${encodeURIComponent(projectKey)}?range=${range}`, { keepPrevious: true })
+  const sameProject = detail.data?.key === projectKey
+  const data = sameProject ? detail.data : null
+  const error = detail.error
+  const stale = detail.stale
   const [metric, setMetric] = useState<Metric>('messages')
   const heat = useApi<HeatmapResponse>(`/api/heatmap?view=calendar&metric=${metric}&project=${encodeURIComponent(projectKey)}`)
 
   return (
     <div className="mx-auto max-w-[1180px] space-y-6">
-      <a href="/projeler" onClick={(e) => onLinkClick(e, '/projeler')} className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink">
+      <a href={withRange('/projeler', range)} onClick={(e) => onLinkClick(e, withRange('/projeler', range))} className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink">
         <ArrowLeft className="size-4" aria-hidden /> Bütün projeler
       </a>
       {error ? <ErrorNote message={error} /> : null}
       {!data && !error ? <Skeleton className="h-28 w-full" /> : null}
       {data ? (
-        <>
-          <header className="space-y-1">
+        <div className={cx('space-y-6 transition-opacity', stale && 'opacity-60')} aria-busy={stale}>
+          <header className="flex flex-wrap items-end justify-between gap-3">
+            <div className="space-y-1">
             <h1 className="font-display text-[34px] leading-tight font-semibold tracking-[-0.03em]">{data.name}</h1>
             {data.path ? <p className="font-mono text-[12px] text-ink-3">{data.path.replace(/^\/Users\/[^/]+/, '~')}</p> : null}
+            </div>
+            <RangePicker value={range} onChange={setRange} />
           </header>
 
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line max-sm:[&>*:last-child]:col-span-2 sm:grid-cols-5">
-            <Stat label="Oturum" value={fmtInt(data.sessions)} note={`${fmtDateTime(data.firstTs)} başladı`} />
+            <Stat
+              label="Oturum"
+              value={fmtInt(range === 'all' ? data.sessions : data.rangeSessions)}
+              note={range === 'all' ? `${fmtDateTime(data.firstTs)} başladı` : `toplam ${fmtInt(data.sessions)}`}
+            />
             <Stat label="Mesaj" value={fmtInt(data.messages)} note={`${fmtInt(data.prompts)} istem`} />
-            <Stat label="Maliyet" value={fmtUsd(data.cost)} note={`son 30 gün ${fmtUsd(data.cost30)}`} />
+            <Stat label="Maliyet" value={fmtUsd(data.rangeCost)} note={range === 'all' ? 'tahmini liste fiyatı' : `toplam ${fmtUsd(data.cost)}`} />
             <Stat
               label="Değişen satır"
               value={`+${fmtInt(data.linesAdded)}`}
@@ -109,9 +130,9 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Card>
-              <CardHeader title="En çok değişen dosyalar" aside="Edit, Write ve kabuk düzenlemeleri" />
+              <CardHeader title="En çok değişen dosyalar" aside={`${RANGE_LOWER[range]}, Edit, Write ve kabuk düzenlemeleri`} />
               {data.files.length === 0 ? (
-                <p className="px-5 pb-5 text-ink-2">Bu projede kayıtlı dosya değişikliği yok.</p>
+                <p className="px-5 pb-5 text-ink-2">Bu dönemde kayıtlı dosya değişikliği yok.</p>
               ) : (
                 <div className="overflow-x-auto px-5 pb-4">
                   <table className="w-full min-w-[520px] table-fixed text-[13px]">
@@ -153,7 +174,7 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
 
             <div className="space-y-6">
               <Card>
-                <CardHeader title="Araçlar" aside="en çok kullanılanlar" />
+                <CardHeader title="Araçlar" aside={`${RANGE_LOWER[range]}, en çok kullanılanlar`} />
                 <div className="px-5 pb-5">
                   <HBars
                     format={fmtInt}
@@ -166,7 +187,7 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
                 </div>
               </Card>
               <Card>
-                <CardHeader title="Modeller" />
+                <CardHeader title="Modeller" aside={RANGE_LOWER[range]} />
                 <div className="px-5 pb-5">
                   <HBars format={fmtUsd} items={data.models.map((m) => ({ label: modelName(m.model), value: m.cost }))} />
                 </div>
@@ -177,7 +198,7 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
           <Card>
             <CardHeader title="Açılan PR'lar" aside={data.prs.length ? `${data.prs.length} PR` : null} />
             {data.prs.length === 0 ? (
-              <p className="px-5 pb-5 text-ink-2">Bu projedeki oturumlarda açılmış bir PR kaydı yok.</p>
+              <p className="px-5 pb-5 text-ink-2">Bu dönemde açılmış bir PR kaydı yok.</p>
             ) : (
               <ul className="px-5 pb-4">
                 {data.prs.map((pr) => (
@@ -201,13 +222,13 @@ function ProjectPage({ projectKey }: { projectKey: string }) {
           </Card>
 
           <a
-            href={`/oturumlar?proje=${encodeURIComponent(data.key)}`}
-            onClick={(e) => onLinkClick(e, `/oturumlar?proje=${encodeURIComponent(data.key)}`)}
+            href={withRange(`/oturumlar?proje=${encodeURIComponent(data.key)}`, range)}
+            onClick={(e) => onLinkClick(e, withRange(`/oturumlar?proje=${encodeURIComponent(data.key)}`, range))}
             className="inline-flex items-center gap-1.5 text-[14px] text-accent underline underline-offset-2"
           >
-            Bu projenin {data.sessions} oturumu <ArrowRight className="size-4" aria-hidden />
+            Bu projenin {RANGE_LOWER[range] === 'toplam' ? '' : `${RANGE_LOWER[range]} `}{fmtInt(range === 'all' ? data.sessions : data.rangeSessions)} oturumu <ArrowRight className="size-4" aria-hidden />
           </a>
-        </>
+        </div>
       ) : null}
     </div>
   )

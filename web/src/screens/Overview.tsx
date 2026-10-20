@@ -1,14 +1,15 @@
 import { ArrowUpRight, CircleAlert, X } from 'lucide-react'
 import { withPossessive } from '../../../shared/tr.ts'
-import type { DayDetail, HeatmapResponse, HeatmapView, IndexStatus, Insight, Metric, Summary } from '../../../shared/types.ts'
+import type { DayDetail, HeatmapResponse, HeatmapView, IndexStatus, Insight, Metric, PeriodTotals, RangeKey, Summary } from '../../../shared/types.ts'
 import { Calendar } from '../components/heatmap/Calendar.tsx'
 import { ProjectDay } from '../components/heatmap/ProjectDay.tsx'
 import { WeekHour } from '../components/heatmap/WeekHour.tsx'
 import { Card, CardHeader, Delta, ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
 import {
-  METRIC_LABEL, WEEKDAYS, fmtDayLong, fmtDayShort, fmtDuration, fmtInt, fmtMetric, fmtRelative, fmtTime, fmtUsd,
+  METRIC_LABEL, WEEKDAYS, fmtCompact, fmtDayLong, fmtDayShort, fmtDuration, fmtInt, fmtMetric, fmtRelative, fmtTime, fmtUsd,
 } from '../lib/format.ts'
+import { RangePicker, rangeSpan, useRange } from '../lib/range.tsx'
 import { navigate, onLinkClick, useLocation } from '../lib/router.ts'
 
 const VIEWS: { value: HeatmapView; label: string; slug: string }[] = [
@@ -23,7 +24,8 @@ const METRICS: { value: Metric; slug: string }[] = [
   { value: 'sessions', slug: 'oturum' },
   { value: 'errors', slug: 'hata' },
 ]
-const SPAN: Record<HeatmapView, string> = { calendar: 'Son 12 ayda', weekhour: 'Son 90 günde', project: 'Son 30 günde' }
+/** The calendar always shows a year; the other two views follow the range picker. */
+const spanFor = (view: HeatmapView, range: RangeKey) => (view === 'calendar' ? 'Son 12 ayda' : rangeSpan(range))
 
 /** The view, metric and selected day live in the URL, so back/forward and reloads keep them. */
 function useOverviewState() {
@@ -36,6 +38,8 @@ function useOverviewState() {
     const m = next.metric ?? metric
     const d = next.day === undefined ? day : next.day
     const q = new URLSearchParams()
+    const donem = query.get('donem')
+    if (donem && v !== 'calendar') q.set('donem', donem)
     if (v !== 'calendar') q.set('gorunum', VIEWS.find((x) => x.value === v)?.slug ?? '')
     if (m !== 'messages') q.set('metrik', METRICS.find((x) => x.value === m)?.slug ?? '')
     if (d && v !== 'weekhour') q.set('gun', d)
@@ -46,7 +50,11 @@ function useOverviewState() {
 
 export function Overview() {
   const { view, metric, day, set } = useOverviewState()
-  const heat = useApi<HeatmapResponse>(`/api/heatmap?view=${view}&metric=${metric}`)
+  const [range, setRange] = useRange('30d')
+  const heatPath = `/api/heatmap?view=${view}&metric=${metric}${view === 'calendar' ? '' : `&range=${range}`}`
+  const heatState = useApi<HeatmapResponse>(heatPath, { keepPrevious: true })
+  // Keep the old grid while a new metric or range loads, but never draw it in another view's shape.
+  const heat = heatState.data && heatState.data.view !== view ? { ...heatState, data: null } : heatState
   const summary = useApi<Summary>('/api/summary')
   const insights = useApi<Insight[]>('/api/insights')
   const status = useApi<IndexStatus>('/api/status')
@@ -56,7 +64,7 @@ export function Overview() {
     <div className="mx-auto max-w-[1180px] space-y-6">
       <header className="space-y-2">
         <h1 className="font-display text-[34px] leading-[1.1] font-semibold tracking-[-0.03em] sm:text-[44px]">
-          {heat.data ? <Headline data={heat.data} /> : <span className="text-ink-3">{SPAN[view]} …</span>}
+          {heat.data ? <Headline data={heat.data} span={spanFor(view, range)} /> : <span className="text-ink-3">{spanFor(view, range)} …</span>}
         </h1>
         <p className="min-h-[1.5em] max-w-[70ch] text-[15px] text-ink-2">
           {firstIndex ? (
@@ -71,7 +79,10 @@ export function Overview() {
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-          <Segmented label="Görünüm" value={view} onChange={(v) => set({ view: v })} options={VIEWS} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented label="Görünüm" value={view} onChange={(v) => set({ view: v })} options={VIEWS} />
+            {view !== 'calendar' ? <RangePicker value={range} onChange={setRange} /> : null}
+          </div>
           <Segmented
             label="Metrik"
             value={metric}
@@ -79,7 +90,7 @@ export function Overview() {
             options={METRICS.map((m) => ({ value: m.value, label: METRIC_LABEL[m.value] }))}
           />
         </div>
-        <div className="px-5 py-5">
+        <div className={cx('px-5 py-5 transition-opacity', heat.stale && 'opacity-60')} aria-busy={heat.stale}>
           {heat.error ? (
             <ErrorNote message={heat.error} />
           ) : !heat.data ? (
@@ -98,6 +109,8 @@ export function Overview() {
       </Card>
 
       {summary.data ? <StatStrip s={summary.data} /> : <Skeleton className="h-[88px] w-full" />}
+
+      {summary.data?.periods ? <PeriodTable periods={summary.data.periods} /> : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card>
@@ -128,12 +141,12 @@ export function Overview() {
   )
 }
 
-function Headline({ data }: { data: HeatmapResponse }) {
+function Headline({ data, span }: { data: HeatmapResponse; span: string }) {
   const value =
     data.metric === 'cost' ? `${fmtUsd(data.total)} tahmini maliyet` : fmtMetric(data.metric, data.total)
   return (
     <>
-      <span className="text-ink-2">{SPAN[data.view]} </span>
+      <span className="text-ink-2">{span} </span>
       <span className="num">{value}</span>
     </>
   )
@@ -200,6 +213,63 @@ function StatStrip({ s }: { s: Summary }) {
         </div>
       ))}
     </dl>
+  )
+}
+
+const PERIOD_LABEL: Record<RangeKey, string> = { week: 'Bu hafta', '30d': 'Son 30 gün', all: 'Tüm zamanlar' }
+
+/** Messages, tokens by kind and cost for the three ranges side by side. */
+function PeriodTable({ periods }: { periods: PeriodTotals[] }) {
+  const total = (p: PeriodTotals) => p.input + p.output + p.cacheRead + p.cacheWrite
+  const rows: { label: string; value: (p: PeriodTotals) => number; format: (v: number) => string; strong?: boolean; sub?: boolean }[] = [
+    { label: 'Mesaj', value: (p) => p.messages, format: fmtInt },
+    { label: 'Toplam token', value: total, format: fmtCompact, strong: true },
+    { label: 'Önbellekten okuma', value: (p) => p.cacheRead, format: fmtCompact, sub: true },
+    { label: 'Önbelleğe yazma', value: (p) => p.cacheWrite, format: fmtCompact, sub: true },
+    { label: 'Çıktı', value: (p) => p.output, format: fmtCompact, sub: true },
+    { label: 'Girdi', value: (p) => p.input, format: fmtCompact, sub: true },
+    { label: 'Tahmini maliyet', value: (p) => p.cost, format: fmtUsd },
+  ]
+  return (
+    <Card>
+      <CardHeader title="Dönem özeti" aside="mesaj, token ve maliyet" />
+      <div className="overflow-x-auto px-4 pb-2 sm:px-5">
+        <table className="w-full min-w-[300px] table-fixed text-[12px] sm:text-[13px]">
+          <colgroup>
+            <col className="w-[27%] sm:w-[38%]" />
+            <col />
+            <col />
+            <col />
+          </colgroup>
+          <thead>
+            <tr className="text-[12px] text-ink-3">
+              <th className="sticky left-0 bg-surface pb-2 text-left font-normal" />
+              {periods.map((p) => (
+                <th key={p.key} className="pb-2 text-right font-normal">{PERIOD_LABEL[p.key]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label} className={cx('*:border-t *:border-line', r.strong && 'font-medium')}>
+                <td className={cx('sticky left-0 bg-surface py-1.5 pr-2 leading-snug', r.sub ? 'pl-2 text-ink-2 sm:pl-3' : 'text-ink')}>{r.label}</td>
+                {periods.map((p) => {
+                  const v = r.value(p)
+                  return (
+                    <td key={p.key} className="py-1.5 pl-2 text-right num" title={fmtInt(v)}>
+                      {r.format(v)}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 pb-4 text-[12px] text-ink-3 sm:px-5">
+        Toplam, Claude'un her istekte konuşmayı önbellekten yeniden okumasını da sayar; bu yüzden çok büyüktür. Claude'un yazdığı metin "Çıktı" satırıdır. Tam sayı için üzerine gel.
+      </p>
+    </Card>
   )
 }
 

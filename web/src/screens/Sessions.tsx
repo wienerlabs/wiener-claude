@@ -4,6 +4,7 @@ import type { ProjectOption, SessionList, SessionRow, SessionSource } from '../.
 import { ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
 import { fmtDuration, fmtInt, fmtRelative, fmtUsd } from '../lib/format.ts'
+import { RangePicker, useRange } from '../lib/range.tsx'
 import { navigate, onLinkClick, useLocation } from '../lib/router.ts'
 import { Replay } from './Replay.tsx'
 
@@ -16,6 +17,7 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
   const project = query.get('proje')
   const [text, setText] = useState(q)
   const [limit, setLimit] = useState(PAGE)
+  const [range, setRange] = useRange('all')
 
   const setQuery = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(query)
@@ -32,13 +34,14 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
     const id = setTimeout(() => setQuery({ q: text.trim() || null }), 250)
     return () => clearTimeout(id)
   })
-  useEffect(() => setLimit(PAGE), [q, source, project])
+  useEffect(() => setLimit(PAGE), [q, source, project, range])
 
   const params = new URLSearchParams({ limit: String(limit) })
   if (q) params.set('q', q)
   if (source) params.set('source', source)
   if (project) params.set('project', project)
-  const list = useApi<SessionList>(`/api/sessions?${params}`)
+  if (range !== 'all') params.set('range', range)
+  const list = useApi<SessionList>(`/api/sessions?${params}`, { keepPrevious: true })
   const projects = useApi<ProjectOption[]>('/api/projects')
   // Keep the list's filters when opening a session, but not a previous search hit.
   const listQuery = new URLSearchParams(query)
@@ -70,6 +73,7 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
             className="h-9 w-full bg-transparent text-[14px] outline-none placeholder:text-ink-3"
           />
         </label>
+        <RangePicker value={range} onChange={setRange} />
         <div className="flex flex-wrap items-center gap-2">
           <Segmented<'all' | SessionSource>
             label="Kaynak"
@@ -105,10 +109,10 @@ export function Sessions({ selectedId }: { selectedId: string | null }) {
             <p className="text-[12px] text-ink-3 num">{fmtInt(list.data.total)} oturum</p>
             {list.data.rows.length === 0 ? (
               <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[13px] text-ink-2">
-                {q ? `"${q}" için oturum bulunamadı. Başka bir kelime dene.` : 'Bu filtrelerle eşleşen oturum yok.'}
+                {q ? `"${q}" için ${range === 'all' ? '' : 'bu dönemde '}oturum bulunamadı. Başka bir kelime dene.` : 'Bu filtrelerle eşleşen oturum yok.'}
               </p>
             ) : (
-              <ul className="overflow-hidden rounded-xl border border-line bg-surface">
+              <ul className={cx('overflow-hidden rounded-xl border border-line bg-surface transition-opacity', list.stale && 'opacity-60')} aria-busy={list.stale}>
                 {list.data.rows.map((s) => (
                   <SessionItem key={s.id} s={s} active={s.id === selectedId} href={hrefFor(s)} />
                 ))}

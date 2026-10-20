@@ -1,12 +1,23 @@
 import type { Metric } from '../../../shared/types.ts'
 
 const int = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 })
-const compact = new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 })
+const oneDecimal = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 })
 const usd = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 2, minimumFractionDigits: 2 })
 const usdRound = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
 export const fmtInt = (n: number) => int.format(Math.round(n))
-export const fmtCompact = (n: number) => compact.format(n)
+/**
+ * Large counts in words: "12,3 bin", "72,8 milyon", "25,9 milyar". Intl's compact form writes
+ * thousands as "B", which reads as billions to most developers.
+ */
+export function fmtCompact(n: number): string {
+  const abs = Math.abs(n)
+  if (abs < 1e3) return int.format(Math.round(n))
+  for (const [size, word] of [[1e12, 'trilyon'], [1e9, 'milyar'], [1e6, 'milyon'], [1e3, 'bin']] as const) {
+    if (abs >= size) return `${oneDecimal.format(n / size)} ${word}`
+  }
+  return int.format(n)
+}
 export const fmtUsd = (n: number) => (Math.abs(n) >= 1000 ? usdRound.format(n) : usd.format(n))
 
 export const METRIC_LABEL: Record<Metric, string> = {

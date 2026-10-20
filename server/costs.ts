@@ -1,11 +1,12 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { CostMix, CostReport, LimitHit, Limits, ModelCost, Suggestion } from '../shared/types.ts'
+import type { CostMix, CostReport, DailyCost, LimitHit, Limits, ModelCost, RangeKey, Suggestion } from '../shared/types.ts'
 import { withPossessive } from '../shared/tr.ts'
 import type { Db } from './db.ts'
 import { type Pricing, normalizeModel } from './pricing.ts'
-import { addDays, dayKey, today } from './time.ts'
+import { WEEKLY_AFTER_DAYS, previousBounds, rangeBounds } from './range.ts'
+import { addDays, dayKey, today, weekStart } from './time.ts'
 
 type Row = Record<string, unknown>
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
@@ -199,7 +200,14 @@ function priceAs(rows: UsageSums[], pricing: Pricing, model: string): number {
 const PREMIUM = /^claude-(opus|fable|mythos)/
 const CHEAPER_MODEL = 'claude-sonnet-5-5'
 
-function suggestions(db: Db, pricing: Pricing, from: string, to: string, monthCost: number): Suggestion[] {
+const PERIOD: Record<RangeKey, { lead: string; inline: string }> = {
+  week: { lead: 'Bu hafta', inline: 'bu hafta' },
+  '30d': { lead: 'Son 30 günde', inline: 'son 30 günde' },
+  all: { lead: 'Şimdiye kadar', inline: 'şimdiye kadar' },
+}
+
+function suggestions(db: Db, pricing: Pricing, from: string, to: string, periodCost: number, key: RangeKey): Suggestion[] {
+  const period = PERIOD[key]
   const out: Suggestion[] = []
 
   const side = sums(db, 'is_sidechain = 1 AND day BETWEEN ? AND ?', from, to).filter((r) => PREMIUM.test(normalizeModel(r.model)))
@@ -208,16 +216,16 @@ function suggestions(db: Db, pricing: Pricing, from: string, to: string, monthCo
   if (sideCost - sideAlt >= 5) {
     out.push({
       saving: sideCost - sideAlt,
-      text: `Subagent çağrıları bu ay ${money(sideCost)} tuttu. Arama ve keşif gibi işlerde Sonnet 5.5 kullansalardı yaklaşık ${money(sideAlt)} olurdu.`,
+      text: `Subagent çağrıları ${period.inline} ${money(sideCost)} tuttu. Arama ve keşif gibi işlerde Sonnet 5.5 kullansalardı yaklaşık ${money(sideAlt)} olurdu.`,
     })
   }
 
   const big = n((db.prepare(`SELECT COALESCE(sum(cost), 0) AS c FROM api_calls
       WHERE day BETWEEN ? AND ? AND input + cache_read + cache_write_5m + cache_write_1h > ?`).get(from, to, BIG_CONTEXT) as Row).c)
-  if (monthCost > 1 && big / monthCost >= 0.25) {
+  if (periodCost > 1 && big / periodCost >= 0.25) {
     out.push({
       saving: null,
-      text: `Bu ayki maliyetin ${withPossessive((big / monthCost) * 100, '%')} 200 bin token'ı aşan bağlamla yapılan çağrılardan geldi. Uzun oturumları /compact ile özetlemek ya da yeni bir oturuma geçmek bu payı düşürür.`,
+      text: `${period.lead} maliyetin ${withPossessive((big / periodCost) * 100, '%')} 200 bin token'ı aşan bağlamla yapılan çağrılardan geldi. Uzun oturumları /compact ile özetlemek ya da yeni bir oturuma geçmek bu payı düşürür.`,
     })
   }
 
@@ -227,7 +235,7 @@ function suggestions(db: Db, pricing: Pricing, from: string, to: string, monthCo
     const mult = pricing.prices[normalizeModel(r.model)]?.fastMultiplier ?? 1
     premium += r.cost - r.cost / mult
   }
-  if (premium >= 1) out.push({ saving: premium, text: `Hızlı mod bu ay ${money(premium)} fazladan tuttu.` })
+  if (premium >= 1) out.push({ saving: premium, text: `Hızlı mod ${period.inline} ${money(premium)} fazladan tuttu.` })
   return out
 }
 
@@ -259,41 +267,63 @@ export function budgetCrossing(
   return addDays(monthFirst, Math.floor(days))
 }
 
-export function costReport(db: Db, pricing: Pricing, account: AccountInfo | null, now = Date.now(), monthlyBudget: number | null = null): CostReport {
-  const t = today()
-  const mb = monthBounds(t)
-  const monthRows = sums(db, 'day BETWEEN ? AND ?', mb.first, t)
-  const monthCost = monthRows.reduce((s, r) => s + r.cost, 0)
-  const costBetween = (a: string, b: string) => n((db.prepare('SELECT COALESCE(sum(cost), 0) AS c FROM api_calls WHERE day BETWEEN ? AND ?').get(a, b) as Row).c)
-  const elapsedDays = Math.max(1, (now - mb.startMs) / DAY)
-
-  // Counter runs that started this month and own calls; see SessionRow.costHidden.
-  const runs = db.prepare(`SELECT c.total_cost AS total,
-      (SELECT COALESCE(sum(cost), 0) FROM api_calls a WHERE a.session_id = c.session_id AND a.ts >= c.start_time) AS run_cost,
-      (SELECT count(*) FROM api_calls a WHERE a.session_id = c.session_id AND a.ts >= c.start_time) AS run_calls
-    FROM cost_states c WHERE c.start_time >= ?`).all(mb.startMs) as Row[]
-  const hidden = runs.filter((r) => n(r.run_calls) > 0).reduce((s, r) => s + Math.max(0, n(r.total) - n(r.run_cost)), 0)
-
-  let cacheSavings = 0
-  for (const r of monthRows) {
-    const p = pricing.prices[normalizeModel(r.model)]
-    if (p) cacheSavings += (r.cache_read * (p.input - p.cacheRead)) / 1e6
-  }
-
-  const dailyFrom = addDays(t, -29)
-  const dailyRows = db.prepare('SELECT day, model, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day, model').all(dailyFrom, t) as Row[]
-  const daily = new Map<string, { day: string; cost: number; byModel: Record<string, number> }>()
-  for (let d = dailyFrom; d <= t; d = addDays(d, 1)) daily.set(d, { day: d, cost: 0, byModel: {} })
-  for (const r of dailyRows) {
-    const e = daily.get(String(r.day))
+/** Cost per day, or per week (keyed by its Monday) when the range is long. */
+function costSeries(db: Db, from: string, to: string, days: number): CostReport['series'] {
+  const weekly = days > WEEKLY_AFTER_DAYS
+  const bucketOf = (day: string) => (weekly ? weekStart(day) : day)
+  const points = new Map<string, DailyCost>()
+  for (let d = bucketOf(from); d <= to; d = addDays(d, weekly ? 7 : 1)) points.set(d, { day: d, cost: 0, byModel: {} })
+  const rows = db.prepare('SELECT day, model, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day, model').all(from, to) as Row[]
+  for (const r of rows) {
+    const e = points.get(bucketOf(String(r.day)))
     if (!e) continue
     const model = normalizeModel(String(r.model))
     e.cost += n(r.cost)
     e.byModel[model] = (e.byModel[model] ?? 0) + n(r.cost)
   }
+  return { bucket: weekly ? 'week' : 'day', points: [...points.values()] }
+}
+
+export function costReport(
+  db: Db,
+  pricing: Pricing,
+  account: AccountInfo | null,
+  now = Date.now(),
+  monthlyBudget: number | null = null,
+  rangeKey: RangeKey = '30d',
+): CostReport {
+  const t = today()
+  const range = rangeBounds(db, rangeKey)
+  const { fromMs, ...rangeInfo } = range
+  const costBetween = (a: string, b: string) => n((db.prepare('SELECT COALESCE(sum(cost), 0) AS c FROM api_calls WHERE day BETWEEN ? AND ?').get(a, b) as Row).c)
+
+  // The calendar month, for the projection and the budget, whatever range is selected.
+  const mb = monthBounds(t)
+  const monthCost = costBetween(mb.first, t)
+  const elapsedDays = Math.max(1, (now - mb.startMs) / DAY)
+  const monthDaily = (db.prepare('SELECT day, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day ORDER BY day').all(mb.first, t) as Row[]).map(
+    (r) => ({ day: String(r.day), cost: n(r.cost) }),
+  )
+
+  const rows = sums(db, 'day BETWEEN ? AND ?', range.from, range.to)
+  const total = rows.reduce((s, r) => s + r.cost, 0)
+  const prev = previousBounds(range)
+
+  // Counter runs that started in the range and own calls; see SessionRow.costHidden.
+  const runs = db.prepare(`SELECT c.total_cost AS total,
+      (SELECT COALESCE(sum(cost), 0) FROM api_calls a WHERE a.session_id = c.session_id AND a.ts >= c.start_time) AS run_cost,
+      (SELECT count(*) FROM api_calls a WHERE a.session_id = c.session_id AND a.ts >= c.start_time) AS run_calls
+    FROM cost_states c WHERE c.start_time >= ?`).all(fromMs) as Row[]
+  const hidden = runs.filter((r) => n(r.run_calls) > 0).reduce((s, r) => s + Math.max(0, n(r.total) - n(r.run_cost)), 0)
+
+  let cacheSavings = 0
+  for (const r of rows) {
+    const p = pricing.prices[normalizeModel(r.model)]
+    if (p) cacheSavings += (r.cache_read * (p.input - p.cacheRead)) / 1e6
+  }
 
   const byModel = new Map<string, ModelCost>()
-  for (const r of monthRows) {
+  for (const r of rows) {
     const model = normalizeModel(r.model)
     const m = byModel.get(model) ?? { model, cost: 0, calls: 0, output: 0, share: 0 }
     m.cost += r.cost
@@ -301,32 +331,39 @@ export function costReport(db: Db, pricing: Pricing, account: AccountInfo | null
     m.output += r.output
     byModel.set(model, m)
   }
-  const models = [...byModel.values()].map((m) => ({ ...m, share: monthCost > 0 ? m.cost / monthCost : 0 })).sort((a, b) => b.cost - a.cost)
+  const models = [...byModel.values()].map((m) => ({ ...m, share: total > 0 ? m.cost / total : 0 })).sort((a, b) => b.cost - a.cost)
 
   const projects = (db.prepare(`SELECT COALESCE(s.project_key, '?') AS key, COALESCE(s.project_name, 'Bilinmeyen') AS name, sum(a.cost) AS cost
       FROM api_calls a LEFT JOIN sessions s ON s.id = a.session_id WHERE a.day BETWEEN ? AND ?
-      GROUP BY key ORDER BY cost DESC LIMIT 8`).all(mb.first, t) as Row[]).map((r) => ({ key: String(r.key), name: String(r.name), cost: n(r.cost) }))
+      GROUP BY key ORDER BY cost DESC LIMIT 8`).all(range.from, range.to) as Row[]).map((r) => ({ key: String(r.key), name: String(r.name), cost: n(r.cost) }))
 
-  const monthDaily = (db.prepare('SELECT day, sum(cost) AS cost FROM api_calls WHERE day BETWEEN ? AND ? GROUP BY day ORDER BY day').all(mb.first, t) as Row[]).map(
-    (r) => ({ day: String(r.day), cost: n(r.cost) }),
-  )
   return {
-    budget: monthlyBudget
-      ? { monthly: monthlyBudget, crossesOn: budgetCrossing(monthDaily, monthlyBudget, monthCost, elapsedDays, mb.first, mb.daysInMonth) }
-      : null,
+    range: rangeInfo,
+    total,
+    previous: prev ? costBetween(prev.from, prev.to) : null,
+    hidden,
+    cacheSavings,
+    series: costSeries(db, range.from, range.to, range.days),
+    models,
+    mix: mixOf(rows, pricing),
+    tokens: rows.reduce(
+      (t, r) => ({
+        input: t.input + r.input, output: t.output + r.output,
+        cacheRead: t.cacheRead + r.cache_read, cacheWrite: t.cacheWrite + r.cache_write_5m + r.cache_write_1h,
+      }),
+      { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    ),
+    projects,
+    suggestions: suggestions(db, pricing, range.from, range.to, total, range.key),
     month: {
       from: mb.first, to: t, cost: monthCost,
       projected: (monthCost / elapsedDays) * mb.daysInMonth,
       lastMonth: costBetween(mb.prevFirst, mb.prevLast),
       lastMonthToDate: costBetween(mb.prevFirst, mb.prevToDate),
-      hidden,
     },
-    cacheSavings,
-    daily: [...daily.values()],
-    models,
-    mix: mixOf(monthRows, pricing),
-    projects,
-    suggestions: suggestions(db, pricing, mb.first, t, monthCost),
+    budget: monthlyBudget
+      ? { monthly: monthlyBudget, crossesOn: budgetCrossing(monthDaily, monthlyBudget, monthCost, elapsedDays, mb.first, mb.daysInMonth) }
+      : null,
     limits: limits(db, account, now),
   }
 }

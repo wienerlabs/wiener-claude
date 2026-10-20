@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "wiener-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["WIENER_PORT=4757", "WIENER_DATA_DIR=.dev-data", "npm", "run", "dev"],
       "port": 5747
     }
   ]

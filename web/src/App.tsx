@@ -1,6 +1,7 @@
 import { Activity, Boxes, FolderGit2, LayoutGrid, Moon, Monitor, Receipt, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { IndexStatus } from '../../shared/types.ts'
+import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { cx } from './components/ui.tsx'
 import { getJson, useApi } from './lib/api.ts'
 import { fmtRelative } from './lib/format.ts'
@@ -71,33 +72,36 @@ export function App() {
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-8 md:py-8">
-        {path === '/' ? (
-          <Overview />
-        ) : path.startsWith('/oturumlar') ? (
-          <Sessions selectedId={sessionId} />
-        ) : path.startsWith('/projeler') ? (
-          <Projects selectedKey={projectKey} />
-        ) : path === '/maliyet' ? (
-          <Costs />
-        ) : path === '/ortam' ? (
-          <Environment />
-        ) : (
-          <NotFound />
-        )}
+        {/* Keyed by path: moving to another screen clears an error left on the previous one. */}
+        <ErrorBoundary key={path}>
+          {path === '/' ? (
+            <Overview />
+          ) : path.startsWith('/oturumlar') ? (
+            <Sessions selectedId={sessionId} />
+          ) : path.startsWith('/projeler') ? (
+            <Projects selectedKey={projectKey} />
+          ) : path === '/maliyet' ? (
+            <Costs />
+          ) : path === '/ortam' ? (
+            <Environment />
+          ) : (
+            <NotFound />
+          )}
+        </ErrorBoundary>
       </main>
     </div>
   )
 }
 
-/** The brand mark is a tiny heatmap, the thing this tool is about. */
+/** The Wiener Labs "W", traced from the brand artwork; it takes the text color, so it works in both themes. */
 function Mark() {
-  const cells = [1, 3, 0, 2, 4, 1, 0, 2, 3]
   return (
-    <span className="grid grid-cols-3 gap-[2px]" aria-hidden>
-      {cells.map((l, i) => (
-        <span key={i} className="size-[5px] rounded-[1.5px]" style={{ background: `var(--heat-${l})` }} />
-      ))}
-    </span>
+    <svg viewBox="0 0 607 424" className="h-[15px] w-auto shrink-0 text-ink" fill="currentColor" aria-hidden>
+      <path
+        fillRule="evenodd"
+        d="M2 0 122 1 122 279 127 291 134 298 148 303 221 302 233 296 233 294 238 290 242 281 243 1 363 1 365 281 370 292 372 292 377 298 386 302 485 304 485 424 364 424 253 312 248 316 243 328 242 424 121 424 117 421 11 315 4 304 1 295 0 2Z M487 0 605 0 607 2 607 177 601 189 545 243 488 243 486 241 486 183 533 182 541 178 546 169 546 122 487 122 485 119Z"
+      />
+    </svg>
   )
 }
 

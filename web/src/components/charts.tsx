@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DailyCost } from '../../../shared/types.ts'
-import { MONTHS_SHORT, fmtDayLong, fmtUsd, modelName, parseDay } from '../lib/format.ts'
+import { MONTHS_SHORT, fmtDayLong, fmtDayShort, fmtUsd, modelName, parseDay } from '../lib/format.ts'
 import { HEAT, levelOf, quartiles, useTooltip } from './heatmap/scale.tsx'
 
 function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -25,37 +25,48 @@ export function niceMax(v: number): number {
 }
 
 /** One bar per day; hovering a day lists what each model cost. */
-export function DailyBars({ data, height = 180 }: { data: DailyCost[]; height?: number }) {
+export function DailyBars({ data, bucket = 'day', height = 180 }: { data: DailyCost[]; bucket?: 'day' | 'week'; height?: number }) {
   const [wrap, width] = useWidth<HTMLDivElement>()
   const { box, show, hide, node } = useTooltip()
-  const axis = 44
+  const max0 = niceMax(Math.max(...data.map((d) => d.cost), 0))
+  const axisLabel = (v: number) => fmtUsd(v).replace(/,00$/, '')
+  // Wide enough for the longest axis label ("$5.000"), in 11px monospace.
+  const axis = Math.max(36, axisLabel(max0).length * 7 + 12)
   const bottom = 20
   // Room above the top gridline so its label isn't clipped.
   const top = 8
-  const max = niceMax(Math.max(...data.map((d) => d.cost), 0))
+  const max = max0
   const plotW = Math.max(0, width - axis)
   const step = data.length ? plotW / data.length : 0
-  const barW = Math.max(2, step - 2)
+  // A few days would make slabs; cap the width and center each bar in its slot.
+  const barW = Math.max(2, Math.min(step - 2, 40))
+  const inset = (step - barW) / 2
   const y = (v: number) => top + (height - bottom - top) * (1 - v / max)
 
   return (
     <div ref={box} className="relative" onMouseLeave={hide}>
       <div ref={wrap} className="w-full">
         {width > 0 ? (
-          <svg width={width} height={height} role="img" aria-label="Son 30 günün günlük maliyeti">
+          <svg width={width} height={height} role="img" aria-label={bucket === 'week' ? 'Haftalık maliyet' : 'Günlük maliyet'}>
             {[0, 0.5, 1].map((f) => (
               <g key={f}>
                 <line x1={axis} x2={width} y1={y(max * f)} y2={y(max * f)} stroke="var(--line)" strokeWidth={1} />
                 <text x={axis - 8} y={y(max * f)} dy="0.32em" textAnchor="end" className="fill-ink-3 font-mono text-[11px]">
-                  {fmtUsd(max * f).replace(/,00$/, '')}
+                  {axisLabel(max * f)}
                 </text>
               </g>
             ))}
             {data.map((d, i) => {
-              const x = axis + i * step + 1
+              const x = axis + i * step + inset
               const h = height - bottom - y(d.cost)
               const date = parseDay(d.day)
-              const label = i === 0 || date.getDate() === 1 ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : date.getDay() === 1 ? String(date.getDate()) : ''
+              const label =
+                bucket === 'week'
+                  ? date.getDate() <= 7 ? MONTHS_SHORT[date.getMonth()] ?? '' : ''
+                  : data.length <= 10
+                    ? i === 0 || date.getDate() === 1 ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : String(date.getDate())
+                    : i === 0 || date.getDate() === 1 ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : date.getDay() === 1 ? String(date.getDate()) : ''
+              const when = bucket === 'week' ? `${fmtDayShort(d.day)} haftası` : fmtDayLong(d.day)
               const rows = Object.entries(d.byModel)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 4)
@@ -76,9 +87,9 @@ export function DailyBars({ data, height = 180 }: { data: DailyCost[]; height?: 
                     height={height - bottom}
                     fill="transparent"
                     tabIndex={0}
-                    aria-label={`${fmtDayLong(d.day)}: ${fmtUsd(d.cost)}`}
-                    onMouseEnter={(e) => show(e.currentTarget, { value: fmtUsd(d.cost), label: fmtDayLong(d.day), rows })}
-                    onFocus={(e) => show(e.currentTarget, { value: fmtUsd(d.cost), label: fmtDayLong(d.day), rows })}
+                    aria-label={`${when}: ${fmtUsd(d.cost)}`}
+                    onMouseEnter={(e) => show(e.currentTarget, { value: fmtUsd(d.cost), label: when, rows })}
+                    onFocus={(e) => show(e.currentTarget, { value: fmtUsd(d.cost), label: when, rows })}
                     onBlur={hide}
                   />
                 </g>
@@ -116,7 +127,7 @@ export function HBars({ items, format }: { items: { label: string; value: number
 }
 
 /** Parts of a whole as one bar, each part labeled with its share and amount below. */
-export function ShareBar({ parts, format }: { parts: { label: string; value: number; color: string }[]; format: (v: number) => string }) {
+export function ShareBar({ parts, format }: { parts: { label: string; value: number; color: string; detail?: string }[]; format: (v: number) => string }) {
   const total = parts.reduce((s, p) => s + p.value, 0)
   const shown = parts.filter((p) => p.value > 0)
   return (
@@ -128,9 +139,12 @@ export function ShareBar({ parts, format }: { parts: { label: string; value: num
       </div>
       <ul className="mt-3 space-y-1.5">
         {parts.map((p) => (
-          <li key={p.label} className="flex items-center gap-2 text-[13px]">
+          <li key={p.label} className="flex items-baseline gap-2 text-[13px]">
             <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: p.color }} aria-hidden />
-            <span className="flex-1 text-ink-2">{p.label}</span>
+            <span className="min-w-0 flex-1 text-ink-2">
+              {p.label}
+              {p.detail ? <span className="block text-[12px] text-ink-3 num">{p.detail}</span> : null}
+            </span>
             <span className="font-mono text-[12px] num">{total > 0 ? `%${Math.round((p.value / total) * 100)}` : '—'}</span>
             <span className="w-20 text-right font-mono text-[12px] text-ink-2 num">{format(p.value)}</span>
           </li>

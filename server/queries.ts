@@ -1,8 +1,9 @@
 import type {
-  DayDetail, HeatmapResponse, HeatmapView, Insight, Metric, SessionList, SessionRow, SessionSource, Summary,
+  DayDetail, HeatmapResponse, HeatmapView, Insight, Metric, PeriodTotals, RangeKey, SessionList, SessionRow, SessionSource, Summary,
 } from '../shared/types.ts'
 import type { Db } from './db.ts'
 import { budgetCrossing } from './costs.ts'
+import { WEEKLY_AFTER_DAYS, rangeBounds } from './range.ts'
 import { matchFor, searchSessions } from './search.ts'
 import { withPossessive } from '../shared/tr.ts'
 import { addDays, today, weekStart } from './time.ts'
@@ -50,7 +51,14 @@ export function heatmap(db: Db, view: HeatmapView, metric: Metric, from: string,
   let cells: { key: string; value: number }[]
   let projects: HeatmapResponse['projects'] = []
 
+  // Long project ranges go by week (keyed by Monday), so the grid keeps readable columns.
+  const days = Math.round((Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000) + 1
+  const weekly = view === 'project' && days > WEEKLY_AFTER_DAYS
+  const columns: string[] = []
+  if (view === 'project') for (let d = weekly ? weekStart(from) : from; d <= to; d = addDays(d, weekly ? 7 : 1)) columns.push(d)
+
   if (view === 'project') {
+    const bucket = weekly ? "date(f.day, '-' || f.dow || ' days')" : 'f.day'
     const totals = db
       .prepare(`WITH f AS (${facts})
         SELECT COALESCE(s.project_key, '?') AS key, COALESCE(s.project_name, 'Bilinmeyen') AS name, ${agg} AS total
@@ -62,8 +70,8 @@ export function heatmap(db: Db, view: HeatmapView, metric: Metric, from: string,
     const topKeys = new Set(top.map((p) => p.key))
     const raw = db
       .prepare(`WITH f AS (${facts})
-        SELECT COALESCE(s.project_key, '?') AS pkey, f.day AS day, ${agg} AS value
-        FROM f LEFT JOIN sessions s ON s.id = f.session_id GROUP BY pkey, f.day`)
+        SELECT COALESCE(s.project_key, '?') AS pkey, ${bucket} AS day, ${agg} AS value
+        FROM f LEFT JOIN sessions s ON s.id = f.session_id GROUP BY pkey, ${bucket}`)
       .all(params) as { pkey: string; day: string; value: number }[]
     cells = []
     const other = new Map<string, number>()
@@ -86,7 +94,7 @@ export function heatmap(db: Db, view: HeatmapView, metric: Metric, from: string,
 
   const totalRow = db.prepare(`WITH f AS (${facts}) SELECT ${agg} AS total FROM f`).get(params) as { total: number }
   return {
-    view, metric, from, to, cells, projects,
+    view, metric, from, to, cells, projects, columns, bucket: weekly ? 'week' : 'day',
     max: cells.reduce((m, c) => Math.max(m, c.value), 0),
     total: n(totalRow?.total),
   }
@@ -100,6 +108,19 @@ function messagesOn(db: Db, from: string, to: string): number {
 
 function costBetween(db: Db, from: string, to: string): number {
   return n(one(db, 'SELECT COALESCE(sum(cost), 0) AS c FROM api_calls WHERE day BETWEEN ? AND ?', from, to)?.c)
+}
+
+/** Messages, tokens by kind and cost for one range. */
+export function periodTotals(db: Db, key: RangeKey): PeriodTotals {
+  const r = rangeBounds(db, key)
+  const t = one(db, `SELECT COALESCE(sum(input), 0) AS input, COALESCE(sum(output), 0) AS output, COALESCE(sum(cache_read), 0) AS cache_read,
+      COALESCE(sum(cache_write_5m + cache_write_1h), 0) AS cache_write, COALESCE(sum(cost), 0) AS cost
+    FROM api_calls WHERE day BETWEEN ? AND ?`, r.from, r.to)
+  return {
+    key, from: r.from, to: r.to,
+    messages: messagesOn(db, r.from, r.to),
+    input: n(t?.input), output: n(t?.output), cacheRead: n(t?.cache_read), cacheWrite: n(t?.cache_write), cost: n(t?.cost),
+  }
 }
 
 export function summary(db: Db, live: Summary['live']): Summary {
@@ -125,6 +146,7 @@ export function summary(db: Db, live: Summary['live']): Summary {
   const firstDay = days[0] ?? null
   return {
     today: { messages: messagesOn(db, t, t), yesterdayMessages: messagesOn(db, addDays(t, -1), addDays(t, -1)) },
+    periods: (['week', '30d', 'all'] as const).map((k) => periodTotals(db, k)),
     week: { cost: costBetween(db, ws, t), lastWeekCost: costBetween(db, lastWs, addDays(lastWs, elapsed)) },
     live,
     streak: { current, longest, activeToday: active.has(t) },
@@ -168,6 +190,8 @@ export interface SessionQuery {
   q?: string | null
   project?: string | null
   source?: SessionSource | null
+  /** Only sessions with activity in the range. */
+  range?: RangeKey | null
   limit?: number
   offset?: number
 }
@@ -181,6 +205,10 @@ export function sessions(db: Db, query: SessionQuery = {}): SessionList {
   }
   if (query.source === 'cli') where.push("s.entrypoint = 'cli' AND d.cli_session_id IS NULL")
   else if (query.source === 'desktop') where.push("(d.cli_session_id IS NOT NULL OR s.entrypoint LIKE '%desktop%')")
+  if (query.range && query.range !== 'all') {
+    where.push('s.last_ts >= $rangeFrom')
+    params.$rangeFrom = rangeBounds(db, query.range).fromMs
+  }
   const limit = Math.min(query.limit ?? 50, 200)
   const offset = query.offset ?? 0
   const q = query.q?.trim()

@@ -12,6 +12,7 @@ import { envReport, fileContent } from './env.ts'
 import { liveSessions } from './live.ts'
 import type { Pricing } from './pricing.ts'
 import { projectDetail, projectList } from './projects.ts'
+import { parseRange, rangeBounds } from './range.ts'
 import * as q from './queries.ts'
 import { turnsOf } from './replay.ts'
 import { SettingsError, readSettings, updateSettings } from './settings.ts'
@@ -73,9 +74,11 @@ export function createApp(ctx: AppContext): Hono {
     const view = (c.req.query('view') ?? 'calendar') as HeatmapView
     const metric = (c.req.query('metric') ?? 'messages') as Metric
     if (!q.VIEWS.includes(view) || !q.METRICS.includes(metric)) return c.json({ error: 'Geçersiz görünüm ya da metrik' }, 400)
-    const range = q.defaultRange(view)
-    const from = c.req.query('from') ?? range.from
-    const to = c.req.query('to') ?? range.to
+    // ?range=week|30d|all wins; otherwise explicit from/to, otherwise the view's default window.
+    const named = c.req.query('range') ? rangeBounds(db, parseRange(c.req.query('range'), '30d')) : null
+    const range = named ?? q.defaultRange(view)
+    const from = named ? named.from : c.req.query('from') ?? range.from
+    const to = named ? named.to : c.req.query('to') ?? range.to
     if (!DAY.test(from) || !DAY.test(to)) return c.json({ error: 'Tarih YYYY-AA-GG biçiminde olmalı' }, 400)
     return c.json(q.heatmap(db, view, metric, from, to, c.req.query('project') || null))
   })
@@ -119,14 +122,16 @@ export function createApp(ctx: AppContext): Hono {
     return content ? c.json(content) : c.json({ error: 'Dosya bulunamadı' }, 404)
   })
 
-  app.get('/api/projects', (c) => c.json(projectList(db)))
+  app.get('/api/projects', (c) => c.json(projectList(db, parseRange(c.req.query('range'), 'all'))))
 
   app.get('/api/projects/:key', (c) => {
-    const detail = projectDetail(db, c.req.param('key'))
+    const detail = projectDetail(db, c.req.param('key'), parseRange(c.req.query('range'), 'all'))
     return detail ? c.json(detail) : c.json({ error: 'Proje bulunamadı' }, 404)
   })
 
-  app.get('/api/costs', (c) => c.json(costReport(db, ctx.pricing, readAccount(), Date.now(), readSettings().monthlyBudget)))
+  app.get('/api/costs', (c) =>
+    c.json(costReport(db, ctx.pricing, readAccount(), Date.now(), readSettings().monthlyBudget, parseRange(c.req.query('range'), '30d'))),
+  )
 
   app.get('/api/sessions', (c) => {
     const source = c.req.query('source')
@@ -135,6 +140,7 @@ export function createApp(ctx: AppContext): Hono {
         q: c.req.query('q') ?? null,
         project: c.req.query('project') ?? null,
         source: source === 'cli' || source === 'desktop' ? (source as SessionSource) : null,
+        range: parseRange(c.req.query('range'), 'all'),
         limit: Number(c.req.query('limit') ?? 50) || 50,
         offset: Number(c.req.query('offset') ?? 0) || 0,
       }),
