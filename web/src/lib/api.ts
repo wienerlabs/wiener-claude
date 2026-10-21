@@ -59,6 +59,41 @@ export function useDataVersion(): number {
   )
 }
 
+const ACCOUNT_KEY = 'wiener-account'
+let account: string | null = (() => {
+  try {
+    return localStorage.getItem(ACCOUNT_KEY)
+  } catch {
+    return null
+  }
+})()
+const accountListeners = new Set<() => void>()
+
+function setAccount(next: string | null): void {
+  if (next === account) return
+  account = next
+  for (const l of accountListeners) l()
+  try {
+    if (next) localStorage.setItem(ACCOUNT_KEY, next)
+    else localStorage.removeItem(ACCOUNT_KEY)
+  } catch {
+    return
+  }
+}
+
+export function useAccount(): [string | null, (next: string | null) => void] {
+  const value = useSyncExternalStore(
+    (cb) => {
+      accountListeners.add(cb)
+      return () => accountListeners.delete(cb)
+    },
+    () => account,
+  )
+  return [value, setAccount]
+}
+
+const withAccount = (path: string) => (account ? `${path}${path.includes('?') ? '&' : '?'}account=${encodeURIComponent(account)}` : path)
+
 export class ApiError extends Error {}
 
 /** API paths carry the interface language; the server writes its sentences in it. */
@@ -68,7 +103,7 @@ export function withLang(path: string): string {
 
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   if (DEMO) return demoJson<T>(withLang(path), signal)
-  const res = await fetch(withLang(path), { signal })
+  const res = await fetch(withAccount(withLang(path)), { signal })
   if (!res.ok) {
     let message = tx(`Sunucu ${res.status} döndü`, `The server returned ${res.status}`)
     try {
@@ -97,21 +132,23 @@ export interface ApiState<T> {
  */
 export function useApi<T>(path: string | null, opts: { keepPrevious?: boolean } = {}): ApiState<T> {
   const v = useDataVersion()
-  const [state, setState] = useState<Omit<ApiState<T>, 'stale'> & { path: string | null }>({ data: null, error: null, loading: true, path })
+  const [account] = useAccount()
+  const key = path && `${account ?? ''}|${path}`
+  const [state, setState] = useState<Omit<ApiState<T>, 'stale'> & { key: string | null }>({ data: null, error: null, loading: true, key })
   useEffect(() => {
     if (!path) return
     const ctrl = new AbortController()
-    setState((s) => ({ ...s, loading: true, ...(s.path !== path && !opts.keepPrevious ? { data: null, error: null, path } : {}) }))
+    setState((s) => ({ ...s, loading: true, ...(s.key !== key && !opts.keepPrevious ? { data: null, error: null, key } : {}) }))
     getJson<T>(path, ctrl.signal).then(
-      (data) => setState({ data, error: null, loading: false, path }),
+      (data) => setState({ data, error: null, loading: false, key }),
       (err: unknown) => {
         if (ctrl.signal.aborted) return
-        setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err), loading: false, path }))
+        setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err), loading: false, key }))
       },
     )
     return () => ctrl.abort()
-  }, [path, v, opts.keepPrevious])
-  if (state.path === path) return { ...state, stale: false }
+  }, [path, key, v, opts.keepPrevious])
+  if (state.key === key) return { ...state, stale: false }
   return opts.keepPrevious && state.data !== null
     ? { data: state.data, error: null, loading: true, stale: true }
     : { data: null, error: null, loading: true, stale: false }

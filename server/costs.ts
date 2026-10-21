@@ -26,7 +26,7 @@ export interface AccountInfo {
   usage: { fetchedAt: number; fiveHour: { percent: number; resetsAt: number | null } | null; sevenDay: { percent: number; resetsAt: number | null } | null } | null
 }
 
-function accountFile(): string {
+export function accountFile(): string {
   return process.env.CLAUDE_CONFIG_DIR ? path.join(process.env.CLAUDE_CONFIG_DIR, '.claude.json') : path.join(os.homedir(), '.claude.json')
 }
 
@@ -43,27 +43,32 @@ export function planName(tier: string | null, orgType: string | null): string | 
   return null
 }
 
-let cached: { mtime: number; info: AccountInfo } | null = null
+export function planOf(acct: Record<string, unknown>): string | null {
+  return planName(
+    typeof acct.organizationRateLimitTier === 'string' ? acct.organizationRateLimitTier : typeof acct.userRateLimitTier === 'string' ? acct.userRateLimitTier : null,
+    typeof acct.organizationType === 'string' ? acct.organizationType : null,
+  )
+}
+
+let cached: { mtime: number; info: AccountInfo; accountId: string | null } | null = null
 
 /**
  * The plan and Claude Code's last usage reading from ~/.claude.json. Only those fields are read:
  * names, e-mail addresses and ids never leave this function.
  */
-export function readAccount(file = accountFile()): AccountInfo | null {
+export function readAccount(file = accountFile(), onlyAccount: string | null = null): AccountInfo | null {
   let mtime: number
   try {
     mtime = fs.statSync(file).mtimeMs
   } catch {
     return null
   }
-  if (cached && cached.mtime === mtime && file === accountFile()) return cached.info
+  const pick = (info: AccountInfo, accountId: string | null) => (onlyAccount && accountId !== onlyAccount ? null : info)
+  if (cached && cached.mtime === mtime && file === accountFile()) return pick(cached.info, cached.accountId)
   try {
     const o = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>
     const acct = (o.oauthAccount ?? {}) as Record<string, unknown>
-    const plan = planName(
-      typeof acct.organizationRateLimitTier === 'string' ? acct.organizationRateLimitTier : typeof acct.userRateLimitTier === 'string' ? acct.userRateLimitTier : null,
-      typeof acct.organizationType === 'string' ? acct.organizationType : null,
-    )
+    const plan = planOf(acct)
     const u = o.cachedUsageUtilization as Record<string, unknown> | undefined
     const util = (u?.utilization ?? {}) as Record<string, Record<string, unknown> | null>
     const window = (w: Record<string, unknown> | null | undefined) =>
@@ -74,8 +79,9 @@ export function readAccount(file = accountFile()): AccountInfo | null {
       plan,
       usage: typeof u?.fetchedAtMs === 'number' ? { fetchedAt: u.fetchedAtMs, fiveHour: window(util.five_hour), sevenDay: window(util.seven_day) } : null,
     }
-    if (file === accountFile()) cached = { mtime, info }
-    return info
+    const accountId = typeof acct.accountUuid === 'string' ? acct.accountUuid : null
+    if (file === accountFile()) cached = { mtime, info, accountId }
+    return pick(info, accountId)
   } catch {
     return null
   }

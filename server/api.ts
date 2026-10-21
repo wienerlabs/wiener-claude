@@ -6,6 +6,7 @@ import { type Context, Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { type Lang, isLang, pick } from '../shared/i18n.ts'
 import type { HeatmapView, Metric, ReplayPage, SessionSource } from '../shared/types.ts'
+import { accountInfo, listAccounts } from './accounts.ts'
 import type { Db } from './db.ts'
 import type { Indexer } from './indexer.ts'
 import { costReport, readAccount } from './costs.ts'
@@ -30,6 +31,7 @@ export interface AppContext {
   staticDir: string | null
   /** Host names accepted in the Host header; null accepts any (LAN mode). */
   allowedHosts: Set<string> | null
+  accountDb?: (account: string) => Db | null
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
@@ -61,6 +63,11 @@ function hostname(header: string | undefined): string {
 export function createApp(ctx: AppContext): Hono {
   const { db } = ctx
   const app = new Hono()
+  const scopeOf = (c: Context): { db: Db; account: string | null } => {
+    const account = c.req.query('account') ?? null
+    const scoped = account ? (ctx.accountDb?.(account) ?? null) : null
+    return scoped ? { db: scoped, account } : { db, account: null }
+  }
 
   // Blocks DNS rebinding: a page on another origin resolving its name to 127.0.0.1.
   app.use('*', async (c, next) => {
@@ -100,11 +107,17 @@ export function createApp(ctx: AppContext): Hono {
 
   app.get('/api/status', (c) => c.json(ctx.indexer.status))
 
-  app.get('/api/summary', async (c) => c.json(q.summary(db, await liveSessions(db))))
+  app.get('/api/accounts', (c) => c.json(listAccounts(db, langOf(c))))
+
+  app.get('/api/summary', async (c) => {
+    const { db, account } = scopeOf(c)
+    return c.json(q.summary(db, await liveSessions(db, account !== null)))
+  })
 
   const badDate = (c: Context) => c.json({ error: pick(langOf(c), 'Tarih YYYY-AA-GG biçiminde olmalı', 'Dates must be in YYYY-MM-DD format') }, 400)
 
   app.get('/api/heatmap', (c) => {
+    const { db } = scopeOf(c)
     const view = (c.req.query('view') ?? 'calendar') as HeatmapView
     const metric = (c.req.query('metric') ?? 'messages') as Metric
     if (!q.VIEWS.includes(view) || !q.METRICS.includes(metric)) return c.json({ error: pick(langOf(c), 'Geçersiz görünüm ya da metrik', 'Invalid view or metric') }, 400)
@@ -120,10 +133,10 @@ export function createApp(ctx: AppContext): Hono {
   app.get('/api/day/:day', (c) => {
     const day = c.req.param('day')
     if (!DAY.test(day)) return badDate(c)
-    return c.json(q.day(db, day))
+    return c.json(q.day(scopeOf(c).db, day))
   })
 
-  app.get('/api/insights', (c) => c.json(q.insights(db, readSettings().monthlyBudget, langOf(c))))
+  app.get('/api/insights', (c) => c.json(q.insights(scopeOf(c).db, readSettings().monthlyBudget, langOf(c))))
 
   app.get('/api/settings', (c) => c.json(readSettings()))
 
@@ -145,43 +158,48 @@ export function createApp(ctx: AppContext): Hono {
   })
 
   // Reads a few hundred small files; while sessions run, the panel asks again every few seconds.
-  const envCache = new Map<Lang, { at: number; report: ReturnType<typeof envReport> }>()
+  const envCache = new Map<string, { at: number; report: ReturnType<typeof envReport> }>()
   app.get('/api/env', (c) => {
+    const { db, account } = scopeOf(c)
     const lang = langOf(c)
-    let hit = envCache.get(lang)
+    const key = `${lang}|${account ?? ''}`
+    let hit = envCache.get(key)
     if (!hit || Date.now() - hit.at > 5000) {
       hit = { at: Date.now(), report: envReport(db, lang) }
-      envCache.set(lang, hit)
+      envCache.set(key, hit)
     }
     return c.json(hit.report)
   })
 
   app.get('/api/env/file/:id', (c) => {
-    const content = fileContent(db, c.req.param('id'))
+    const content = fileContent(scopeOf(c).db, c.req.param('id'))
     return content ? c.json(content) : c.json({ error: pick(langOf(c), 'Dosya bulunamadı', 'File not found') }, 404)
   })
 
-  app.get('/api/projects', (c) => c.json(projectList(db, parseRange(c.req.query('range'), 'all'))))
+  app.get('/api/projects', (c) => c.json(projectList(scopeOf(c).db, parseRange(c.req.query('range'), 'all'))))
 
   app.get('/api/projects/:key', (c) => {
-    const detail = projectDetail(db, c.req.param('key'), parseRange(c.req.query('range'), 'all'))
+    const detail = projectDetail(scopeOf(c).db, c.req.param('key'), parseRange(c.req.query('range'), 'all'))
     return detail ? c.json(detail) : c.json({ error: pick(langOf(c), 'Proje bulunamadı', 'Project not found') }, 404)
   })
 
-  app.get('/api/tips', (c) => c.json(tipsReport(db, ctx.pricing, parseRange(c.req.query('range'), '30d'), undefined, langOf(c))))
+  app.get('/api/tips', (c) => c.json(tipsReport(scopeOf(c).db, ctx.pricing, parseRange(c.req.query('range'), '30d'), undefined, langOf(c))))
 
-  app.get('/api/tools', (c) => c.json(toolsReport(db, parseRange(c.req.query('range'), '30d'))))
+  app.get('/api/tools', (c) => c.json(toolsReport(scopeOf(c).db, parseRange(c.req.query('range'), '30d'))))
 
   app.get('/api/year', (c) => {
     const year = Number(c.req.query('year'))
-    return c.json(yearReport(db, Number.isInteger(year) && year > 2000 && year < 3000 ? year : new Date().getFullYear()))
+    return c.json(yearReport(scopeOf(c).db, Number.isInteger(year) && year > 2000 && year < 3000 ? year : new Date().getFullYear()))
   })
 
-  app.get('/api/costs', (c) =>
-    c.json(costReport(db, ctx.pricing, readAccount(), Date.now(), readSettings().monthlyBudget, parseRange(c.req.query('range'), '30d'))),
-  )
+  app.get('/api/costs', (c) => {
+    const { db: scoped, account } = scopeOf(c)
+    const info = account ? accountInfo(db, account) : readAccount()
+    return c.json(costReport(scoped, ctx.pricing, info, Date.now(), readSettings().monthlyBudget, parseRange(c.req.query('range'), '30d')))
+  })
 
   app.get('/api/sessions', (c) => {
+    const { db } = scopeOf(c)
     const source = c.req.query('source')
     return c.json(
       q.sessions(db, {
@@ -196,6 +214,7 @@ export function createApp(ctx: AppContext): Hono {
   })
 
   app.get('/api/sessions/:id', async (c) => {
+    const { db } = scopeOf(c)
     const id = c.req.param('id')
     const session = q.session(db, id)
     if (!session) return c.json({ error: pick(langOf(c), 'Oturum bulunamadı', 'Session not found') }, 404)
