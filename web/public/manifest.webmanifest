@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "Wiener Tools for Claude Code",
+  "short_name": "Wiener Tools",
+  "description": "Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. Yerel çalışır, veri göndermez.",
+  "lang": "tr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111316",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

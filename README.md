@@ -106,6 +106,8 @@ npx wiener-tools-claude
 
 Panel tarayıcıda kendiliğinden açılır. İlk indeksleme geçmişin büyüklüğüne göre birkaç saniye ile yarım dakika arası sürer; sonraki açılışlarda yalnızca yeni kayıtlar okunur. Kapatmak için terminalde Ctrl+C.
 
+**Uygulama olarak kullan.** Panel adres çubuğu olmadan, kendi penceresi ve simgesiyle de açılabilir. Chrome, Edge ya da Brave'de menünün altındaki **Uygulama olarak yükle** düğmesine bas; Safari'de Dosya menüsündeki **Dock'a Ekle**'yi kullan. Uygulama yine bu bilgisayardaki sunucuya bağlanır: sunucu kapalıyken açarsan nasıl başlatacağını gösteren bir sayfa çıkar, `npx wiener-tools-claude` çalışınca pencere kendiliğinden panele döner. Açık bir panel penceresi varsa komut ayrıca yeni sekme açmaz. Uygulama yüklendiği porta bağlıdır (varsayılan 4747); panel başka bir portta açılırsa (port doluysa ya da `--port` verdiysen) uygulama onu görmez.
+
 | Seçenek | Varsayılan | Açıklama |
 | --- | --- | --- |
 | `--port <n>` | `4747` | Dinlenecek port; doluysa bir sonraki denenir |
@@ -223,7 +225,7 @@ test/      Vitest testleri ve sentetik transcript kayıtları
 
 **Wiener Tools for Claude Code** is a local dashboard for your Claude Code usage. It reads the files Claude Code writes to `~/.claude` and turns them into activity heatmaps, session replays with full-text search, cost and limit tracking, tool and MCP usage, per-project trends, a shareable year-in-review card and evidence-based tips (context bloat, cache rewrites, repeated prompts, setup errors and more), each backed by the sessions it comes from. If you use more than one Claude account in the desktop app, a picker in the menu splits every screen by account. It is the newest addition to [Wiener Tools](https://tools.wienerlabs.xyz), the tool family from [Wiener Labs](https://wienerlabs.xyz).
 
-Everything stays on your machine: the server listens on `127.0.0.1` only, never writes to `~/.claude`, sends nothing anywhere and never shows secret values. Run it with `npx wiener-tools-claude` (Node.js 22.13+), or try the [live demo](https://claude.wienerlabs.xyz/?lang=en) with made-up data. The interface is in English and Turkish: it follows your browser's language, and the TR/EN switch in the menu changes it at any time (`--lang en` opens it in English).
+Everything stays on your machine: the server listens on `127.0.0.1` only, never writes to `~/.claude`, sends nothing anywhere and never shows secret values. Run it with `npx wiener-tools-claude` (Node.js 22.13+), or try the [live demo](https://claude.wienerlabs.xyz/?lang=en) with made-up data. The interface is in English and Turkish: it follows your browser's language, and the TR/EN switch in the menu changes it at any time (`--lang en` opens it in English). To open it in its own window with its own icon, use **Install as app** in the menu (Chrome, Edge, Brave) or File > **Add to Dock** (Safari).
 
 ## Lisans
 
