@@ -8,6 +8,7 @@ import { cx } from './components/ui.tsx'
 import { getJson, useAccount, useApi } from './lib/api.ts'
 import { DEMO } from './lib/demo.ts'
 import { fmtRelative } from './lib/format.ts'
+import { setLang, tx, useLang } from './lib/i18n.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
 import { Costs } from './screens/Costs.tsx'
 import { Environment } from './screens/Environment.tsx'
@@ -18,25 +19,16 @@ import { Tips } from './screens/Tips.tsx'
 import { Tools } from './screens/Tools.tsx'
 import { Year } from './screens/Year.tsx'
 
-const NAV = [
-  { to: '/', label: 'Genel bakış', icon: LayoutGrid, match: (p: string) => p === '/' },
-  { to: '/oturumlar', label: 'Oturumlar', icon: Activity, match: (p: string) => p.startsWith('/oturumlar') },
-  { to: '/projeler', label: 'Projeler', icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
-  { to: '/araclar', label: 'Araçlar', icon: Wrench, match: (p: string) => p.startsWith('/araclar') },
-  { to: '/maliyet', label: 'Maliyet', icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
-  { to: '/ipuclari', label: 'İpuçları', icon: Lightbulb, match: (p: string) => p.startsWith('/ipuclari') },
-  { to: '/ortam', label: 'Ortam', icon: Boxes, match: (p: string) => p.startsWith('/ortam') },
-  { to: '/yil-ozeti', label: 'Yıl özeti', icon: Sparkles, match: (p: string) => p.startsWith('/yil-ozeti') },
-]
-
-const TITLES: [string, string][] = [
-  ['/oturumlar', 'Oturumlar'],
-  ['/projeler', 'Projeler'],
-  ['/araclar', 'Araçlar'],
-  ['/maliyet', 'Maliyet'],
-  ['/ipuclari', 'İpuçları'],
-  ['/ortam', 'Ortam'],
-  ['/yil-ozeti', 'Yıl özeti'],
+// Paths stay the same in both languages, so links keep working whoever shares them.
+const nav = () => [
+  { to: '/', label: tx('Genel bakış', 'Overview'), icon: LayoutGrid, match: (p: string) => p === '/' },
+  { to: '/oturumlar', label: tx('Oturumlar', 'Sessions'), icon: Activity, match: (p: string) => p.startsWith('/oturumlar') },
+  { to: '/projeler', label: tx('Projeler', 'Projects'), icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
+  { to: '/araclar', label: tx('Araçlar', 'Tools'), icon: Wrench, match: (p: string) => p.startsWith('/araclar') },
+  { to: '/maliyet', label: tx('Maliyet', 'Cost'), icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
+  { to: '/ipuclari', label: tx('İpuçları', 'Tips'), icon: Lightbulb, match: (p: string) => p.startsWith('/ipuclari') },
+  { to: '/ortam', label: tx('Ortam', 'Environment'), icon: Boxes, match: (p: string) => p.startsWith('/ortam') },
+  { to: '/yil-ozeti', label: tx('Yıl özeti', 'Year in review'), icon: Sparkles, match: (p: string) => p.startsWith('/yil-ozeti') },
 ]
 
 export function App() {
@@ -46,19 +38,19 @@ export function App() {
   const projectKey = tail('/projeler/')
 
   useEffect(() => {
-    const title = TITLES.find(([prefix]) => path.startsWith(prefix))?.[1]
+    const title = path === '/' ? null : nav().find((n) => n.match(path))?.label
     document.title = title ? `${title} · Wiener Tools` : 'Wiener Tools'
   }, [path])
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
-      <aside className="flex flex-wrap items-center gap-4 border-b md:flex-nowrap border-line bg-bg px-4 py-3 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:gap-0 md:border-r md:border-b-0 md:px-3 md:py-5">
-        <a href="/" onClick={(e) => onLinkClick(e, '/')} aria-label="Wiener Tools ana sayfa" className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
+      <aside className="flex flex-wrap items-center gap-4 border-b border-line bg-bg px-4 py-3 md:sticky md:top-0 md:h-screen md:flex-col md:flex-nowrap md:items-stretch md:gap-0 md:border-r md:border-b-0 md:px-3 md:py-5">
+        <a href="/" onClick={(e) => onLinkClick(e, '/')} aria-label={tx('Wiener Tools ana sayfa', 'Wiener Tools home')} className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
           <Mark />
           <span className="hidden font-display text-[17px] font-semibold tracking-[-0.02em] sm:inline">Wiener Tools</span>
         </a>
-        <nav aria-label="Ana menü" className="flex gap-0.5 md:flex-col md:gap-1">
-          {NAV.map(({ to, label, icon: Icon, match }) => {
+        <nav aria-label={tx('Ana menü', 'Main menu')} className="flex gap-0.5 md:flex-col md:gap-1">
+          {nav().map(({ to, label, icon: Icon, match }) => {
             const active = match(path)
             return (
               <a
@@ -82,7 +74,10 @@ export function App() {
         <div className="ml-auto flex items-center gap-2 md:mt-auto md:ml-0 md:flex-col md:items-stretch md:gap-3 md:px-2">
           <AccountPicker />
           <IndexBadge />
-          <ThemeToggle />
+          <div className="hidden items-center gap-2 sm:flex md:justify-between">
+            <LangToggle />
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-8 md:py-8">
@@ -109,6 +104,10 @@ export function App() {
             <NotFound />
           )}
         </ErrorBoundary>
+        {/* Phones have no room for it in the top bar. */}
+        <footer className="mt-10 flex justify-center sm:hidden">
+          <LangToggle />
+        </footer>
       </main>
     </div>
   )
@@ -121,12 +120,12 @@ function AccountPicker() {
   if (!data || (accounts < 2 && !account)) return null
   return (
     <select
-      aria-label="Hesap"
+      aria-label={tx('Hesap', 'Account')}
       value={account ?? ''}
       onChange={(e) => setAccount(e.target.value || null)}
       className="h-8 min-w-0 max-w-36 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink-2 md:max-w-none"
     >
-      <option value="">Tüm hesaplar</option>
+      <option value="">{tx('Tüm hesaplar', 'All accounts')}</option>
       {data.map((a) => (
         <option key={a.id} value={a.id}>
           {a.label} ({a.sessions})
@@ -158,9 +157,9 @@ function IndexBadge() {
 
   if (DEMO) {
     return (
-      <div className="hidden items-center gap-1.5 text-[12px] text-ink-3 md:flex" title="Bu sayfadaki veriler uydurma">
+      <div className="hidden items-center gap-1.5 text-[12px] text-ink-3 md:flex" title={tx('Bu sayfadaki veriler uydurma', 'The data on this page is made up')}>
         <span className="size-1.5 rounded-full bg-accent" aria-hidden />
-        Demo verisi
+        {tx('Demo verisi', 'Demo data')}
       </div>
     )
   }
@@ -169,8 +168,8 @@ function IndexBadge() {
     const pct = status.bytesTotal > 0 ? Math.round((status.bytesDone / status.bytesTotal) * 100) : 0
     return (
       <div className="text-[12px] text-ink-2" aria-live="polite">
-        <span className="hidden md:inline">İndeksleniyor </span>
-        <span className="num">%{pct}</span>
+        <span className="hidden md:inline">{tx('İndeksleniyor ', 'Indexing ')}</span>
+        <span className="num">{tx(`%${pct}`, `${pct}%`)}</span>
         <div className="mt-1 hidden h-1 overflow-hidden rounded-full bg-line md:block">
           <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
         </div>
@@ -178,19 +177,47 @@ function IndexBadge() {
     )
   }
   return (
-    <div className="hidden items-center gap-1.5 text-[12px] text-ink-3 md:flex" title="Dosyalar değiştikçe indeks kendini günceller">
+    <div className="hidden items-center gap-1.5 text-[12px] text-ink-3 md:flex" title={tx('Dosyalar değiştikçe indeks kendini günceller', 'The index updates itself as the files change')}>
       <span className="size-1.5 rounded-full bg-good" aria-hidden />
-      Güncel{status.lastScanAt ? ` · ${fmtRelative(status.lastScanAt)}` : ''}
+      {tx('Güncel', 'Up to date')}{status.lastScanAt ? ` · ${fmtRelative(status.lastScanAt)}` : ''}
     </div>
   )
 }
 
 type Theme = 'system' | 'light' | 'dark'
-const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
-  { value: 'system', label: 'Sistem teması', icon: Monitor },
-  { value: 'light', label: 'Açık tema', icon: Sun },
-  { value: 'dark', label: 'Koyu tema', icon: Moon },
+const themes = (): { value: Theme; label: string; icon: typeof Sun }[] => [
+  { value: 'system', label: tx('Sistem teması', 'System theme'), icon: Monitor },
+  { value: 'light', label: tx('Açık tema', 'Light theme'), icon: Sun },
+  { value: 'dark', label: tx('Koyu tema', 'Dark theme'), icon: Moon },
 ]
+
+const LANG_OPTIONS = [
+  { value: 'tr', short: 'TR', label: 'Türkçe' },
+  { value: 'en', short: 'EN', label: 'English' },
+] as const
+
+function LangToggle() {
+  const lang = useLang()
+  return (
+    <div role="radiogroup" aria-label={tx('Dil', 'Language')} className="inline-flex rounded-lg border border-line bg-surface p-0.5">
+      {LANG_OPTIONS.map(({ value, short, label }) => (
+        <button
+          key={value}
+          type="button"
+          role="radio"
+          lang={value}
+          aria-checked={lang === value}
+          aria-label={label}
+          title={label}
+          onClick={() => setLang(value)}
+          className={cx('h-7 rounded-md px-1.5 font-mono text-[11px] font-medium', lang === value ? 'bg-accent-soft text-accent' : 'text-ink-3 hover:text-ink')}
+        >
+          {short}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -209,8 +236,8 @@ function ThemeToggle() {
     }
   }
   return (
-    <div role="radiogroup" aria-label="Tema" className="hidden rounded-lg border border-line bg-surface p-0.5 sm:inline-flex">
-      {THEMES.map(({ value, label, icon: Icon }) => (
+    <div role="radiogroup" aria-label={tx('Tema', 'Theme')} className="hidden rounded-lg border border-line bg-surface p-0.5 sm:inline-flex">
+      {themes().map(({ value, label, icon: Icon }) => (
         <button
           key={value}
           type="button"
@@ -231,9 +258,9 @@ function ThemeToggle() {
 function NotFound() {
   return (
     <div className="py-20 text-center">
-      <p className="font-display text-2xl">Bu sayfa yok</p>
+      <p className="font-display text-2xl">{tx('Bu sayfa yok', 'This page does not exist')}</p>
       <a href="/" onClick={(e) => onLinkClick(e, '/')} className="mt-3 inline-block text-accent underline underline-offset-2">
-        Genel bakışa dön
+        {tx('Genel bakışa dön', 'Back to the overview')}
       </a>
     </div>
   )

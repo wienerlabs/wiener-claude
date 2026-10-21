@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { DEMO, demoJson } from './demo.ts'
+import { getLang, tx } from './i18n.ts'
 
 // Bumped whenever the server says the index changed; every useApi refetches on a bump.
 let version = 0
@@ -72,7 +73,6 @@ function setAccount(next: string | null): void {
   if (next === account) return
   account = next
   for (const l of accountListeners) l()
-  refreshNow()
   try {
     if (next) localStorage.setItem(ACCOUNT_KEY, next)
     else localStorage.removeItem(ACCOUNT_KEY)
@@ -96,11 +96,16 @@ const withAccount = (path: string) => (account ? `${path}${path.includes('?') ? 
 
 export class ApiError extends Error {}
 
+/** API paths carry the interface language; the server writes its sentences in it. */
+export function withLang(path: string): string {
+  return `${path}${path.includes('?') ? '&' : '?'}lang=${getLang()}`
+}
+
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  if (DEMO) return demoJson<T>(path, signal)
-  const res = await fetch(withAccount(path), { signal })
+  if (DEMO) return demoJson<T>(withLang(path), signal)
+  const res = await fetch(withAccount(withLang(path)), { signal })
   if (!res.ok) {
-    let message = `Sunucu ${res.status} döndü`
+    let message = tx(`Sunucu ${res.status} döndü`, `The server returned ${res.status}`)
     try {
       const body = (await res.json()) as { error?: string }
       if (body.error) message = body.error

@@ -1,6 +1,6 @@
 {
   "name": "wiener-tools-claude",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Claude Code kullanımın için yerel bir panel: ısı haritaları, oturum dökümleri, maliyet ve limitler, araçlar ve kanıta dayalı ipuçları. Veri makineden çıkmaz.",
   "license": "MIT",
   "author": "Wiener Labs",

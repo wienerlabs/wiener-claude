@@ -1,6 +1,7 @@
 import { type Ref, useMemo } from 'react'
 import type { YearReport } from '../../../shared/types.ts'
-import { MONTHS_SHORT, dayKey, fmtCompact, fmtDayShort, fmtInt, fmtUsd, mcpServerLabel, parseDay } from '../lib/format.ts'
+import { dayKey, fmtCompact, fmtCount, fmtDayShort, fmtInt, fmtUsd, mcpServerLabel, monthsShort, parseDay } from '../lib/format.ts'
+import { tx } from '../lib/i18n.ts'
 import { HEAT, levelOf, quartiles } from './heatmap/scale.tsx'
 import { MARK_PATH } from './Mark.tsx'
 
@@ -12,11 +13,10 @@ const DISPLAY = "'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-
 const SANS = "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif"
 const PAD = 64
 const INNER = CARD_W - PAD * 2
-const MONTHS_LONG = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
 
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s)
 
-/** "26,6 milyar" -> number part and word, so the word can be set smaller. */
+/** "26,6 milyar" -> number part and word, so the word can be set smaller; English "26.6B" has no word. */
 function splitCompact(n: number): [string, string] {
   const s = fmtCompact(n)
   const i = s.indexOf(' ')
@@ -33,20 +33,21 @@ export interface YearCardOptions {
  * Colors are theme variables; the PNG export writes in the current theme's values.
  */
 export function YearCard({ data, options, ref }: { data: YearReport; options: YearCardOptions; ref?: Ref<SVGSVGElement> }) {
-  const span = data.partial ? `1 Ocak – ${fmtDayShort(data.to)} ${data.year}` : `${data.year}`
+  const span = data.partial ? tx(`1 Ocak – ${fmtDayShort(data.to)} ${data.year}`, `January 1 – ${fmtDayShort(data.to)}, ${data.year}`) : `${data.year}`
   const [tokNum, tokWord] = splitCompact(data.totals.tokens)
+  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
   const stats: { value: string; unit?: string; label: string }[] = [
-    { value: fmtInt(data.totals.messages), label: 'mesaj' },
-    { value: fmtInt(data.activeDays), label: 'aktif gün' },
-    { value: tokNum, label: `${tokWord ? `${tokWord} ` : ''}token` },
+    { value: fmtInt(data.totals.messages), label: tx('mesaj', plural(data.totals.messages, 'message', 'messages')) },
+    { value: fmtInt(data.activeDays), label: tx('aktif gün', plural(data.activeDays, 'active day', 'active days')) },
+    { value: tokNum, label: tx(`${tokWord ? `${tokWord} ` : ''}token`, 'tokens') },
     options.hideCost
-      ? { value: fmtInt(data.totals.sessions), label: 'oturum' }
-      : { value: fmtUsd(data.totals.cost), label: 'tahmini maliyet' },
+      ? { value: fmtInt(data.totals.sessions), label: tx('oturum', plural(data.totals.sessions, 'session', 'sessions')) }
+      : { value: fmtUsd(data.totals.cost), label: tx('tahmini maliyet', 'estimated cost') },
   ]
   const colW = INNER / 4
 
   return (
-    <svg ref={ref} viewBox={`0 0 ${CARD_W} ${CARD_H}`} className="block h-auto w-full" role="img" aria-label={`${data.year} yıl özeti kartı`}>
+    <svg ref={ref} viewBox={`0 0 ${CARD_W} ${CARD_H}`} className="block h-auto w-full" role="img" aria-label={tx(`${data.year} yıl özeti kartı`, `Year in review card for ${data.year}`)}>
       <rect width={CARD_W} height={CARD_H} fill="var(--surface)" />
 
       <g transform={`translate(${PAD} 57) scale(${26 / 424})`} fill="var(--ink)">
@@ -60,7 +61,7 @@ export function YearCard({ data, options, ref }: { data: YearReport; options: Ye
       </text>
 
       <text x={PAD} y={172} fontFamily={DISPLAY} fontSize={54} fontWeight={600} fill="var(--ink)" letterSpacing={-1.6}>
-        Claude Code ile {data.year}
+        {tx(`Claude Code ile ${data.year}`, `${data.year} with Claude Code`)}
       </text>
 
       {stats.map((s, i) => (
@@ -80,18 +81,21 @@ export function YearCard({ data, options, ref }: { data: YearReport; options: Ye
 
       <Column
         x={PAD}
-        title="EN ÇOK ÇALIŞILAN PROJELER"
-        rows={data.projects.slice(0, 3).map((p, i) => [options.hideProjects ? `Proje ${i + 1}` : clip(p.name, 20), `${fmtInt(p.messages)}`])}
+        title={tx('EN ÇOK ÇALIŞILAN PROJELER', 'TOP PROJECTS')}
+        rows={data.projects.slice(0, 3).map((p, i) => [options.hideProjects ? tx(`Proje ${i + 1}`, `Project ${i + 1}`) : clip(p.name, 20), `${fmtInt(p.messages)}`])}
         rank
       />
-      <Column x={PAD + INNER / 3} title="EN ÇOK KULLANILAN ARAÇLAR" rows={data.tools.slice(0, 3).map((t) => [clip(mcpServerLabel(t.name), 20), fmtInt(t.calls)])} rank />
+      <Column x={PAD + INNER / 3} title={tx('EN ÇOK KULLANILAN ARAÇLAR', 'TOP TOOLS')} rows={data.tools.slice(0, 3).map((t) => [clip(mcpServerLabel(t.name), 20), fmtInt(t.calls)])} rank />
       <Column
         x={PAD + (INNER / 3) * 2}
-        title="RİTİM"
+        title={tx('RİTİM', 'RHYTHM')}
         rows={[
-          ['En uzun seri', data.longestStreak ? `${data.longestStreak.days} gün` : '—'],
-          ['En yoğun gün', data.busiestDay ? `${parseDay(data.busiestDay.day).getDate()} ${MONTHS_LONG[parseDay(data.busiestDay.day).getMonth()]}` : '—'],
-          ['En verimli saat', data.peakHour !== null ? `${String(data.peakHour).padStart(2, '0')}.00` : '—'],
+          [
+            tx('En uzun seri', 'Longest streak'),
+            data.longestStreak ? tx(`${data.longestStreak.days} gün`, `${data.longestStreak.days} ${plural(data.longestStreak.days, 'day', 'days')}`) : '—',
+          ],
+          [tx('En yoğun gün', 'Busiest day'), data.busiestDay ? fmtDayShort(data.busiestDay.day) : '—'],
+          [tx('En verimli saat', 'Peak hour'), data.peakHour !== null ? tx(`${String(data.peakHour).padStart(2, '0')}.00`, `${String(data.peakHour).padStart(2, '0')}:00`) : '—'],
         ]}
       />
 
@@ -99,7 +103,7 @@ export function YearCard({ data, options, ref }: { data: YearReport; options: Ye
         npx wiener-tools-claude
       </text>
       <text x={CARD_W - PAD} y={CARD_H - 40} textAnchor="end" fontFamily={SANS} fontSize={15} fill="var(--ink-3)">
-        +{fmtInt(data.totals.linesAdded)} satır · {fmtInt(data.totals.files)} dosya · {fmtInt(data.totals.prs)} PR
+        +{fmtCount(data.totals.linesAdded, 'satır', 'line')} · {fmtCount(data.totals.files, 'dosya', 'file')} · {fmtCount(data.totals.prs, 'PR', 'PR')}
       </text>
     </svg>
   )
@@ -118,7 +122,7 @@ function YearGrid({ data, y }: { data: YearReport; y: number }) {
       const key = dayKey(d)
       const index = offset + Math.round((d.getTime() - first.getTime()) / 86_400_000)
       const col = Math.floor(index / 7)
-      if (d.getDate() === 1) months.push({ col: index % 7 === 0 ? col : col + 1, label: MONTHS_SHORT[d.getMonth()] ?? '' })
+      if (d.getDate() === 1) months.push({ col: index % 7 === 0 ? col : col + 1, label: monthsShort()[d.getMonth()] ?? '' })
       cells.push({ col, row: index % 7, fill: HEAT[levelOf(byDay.get(key) ?? 0, t)] ?? HEAT[0], future: key > data.to })
     }
     return { cells, months, cols: Math.max(...cells.map((c) => c.col)) + 1 }

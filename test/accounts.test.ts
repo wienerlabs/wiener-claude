@@ -56,6 +56,7 @@ describe('accounts', () => {
       { id: B, kind: 'account', label: 'kla…@example.com', sessions: 1 },
       { id: UNKNOWN_ACCOUNT, kind: 'unknown', label: 'Hesabı bilinmeyen', sessions: 1 },
     ])
+    expect(listAccounts(db, 'en').map((a) => a.label)).toEqual(['Account 1', 'kla…@example.com', 'Unknown account'])
   })
 
   it('scopes every query to the chosen account and leaves the full index alone', async () => {

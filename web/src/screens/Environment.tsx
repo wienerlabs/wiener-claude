@@ -6,34 +6,41 @@ import type { EnvReport, FileContent, MemoryType, PlanItem, TaskGroup, TaskStatu
 import { HBars } from '../components/charts.tsx'
 import { Card, CardHeader, ErrorNote, Segmented, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
-import { fmtDateTime, fmtInt, fmtRelative } from '../lib/format.ts'
+import { fmtCount, fmtDateTime, fmtInt, fmtRelative } from '../lib/format.ts'
+import { getLang, tx } from '../lib/i18n.ts'
 import { onLinkClick, useLocation } from '../lib/router.ts'
 
 type Section = 'memory' | 'talimatlar' | 'gorevler' | 'skill' | 'mcp' | 'ayarlar'
 
-const SECTIONS: { value: Section; label: string; count: (r: EnvReport) => number | null }[] = [
+const sections = (): { value: Section; label: string; count: (r: EnvReport) => number | null }[] => [
   { value: 'memory', label: 'Memory', count: (r) => r.memory.filter((m) => m.type !== 'index').length },
-  { value: 'talimatlar', label: 'Talimatlar', count: (r) => r.instructions.length },
-  { value: 'gorevler', label: 'Görevler', count: (r) => r.tasks.reduce((s, g) => s + g.tasks.filter((t) => t.status !== 'completed').length, 0) },
-  { value: 'skill', label: "Skill ve plugin'ler", count: (r) => r.skills.length },
+  { value: 'talimatlar', label: tx('Talimatlar', 'Instructions'), count: (r) => r.instructions.length },
+  { value: 'gorevler', label: tx('Görevler', 'Tasks'), count: (r) => r.tasks.reduce((s, g) => s + g.tasks.filter((t) => t.status !== 'completed').length, 0) },
+  { value: 'skill', label: tx("Skill ve plugin'ler", 'Skills and plugins'), count: (r) => r.skills.length },
   { value: 'mcp', label: 'MCP', count: (r) => r.mcp.length },
-  { value: 'ayarlar', label: 'Ayarlar', count: () => null },
+  { value: 'ayarlar', label: tx('Ayarlar', 'Settings'), count: () => null },
 ]
 
 export function Environment() {
   const { query } = useLocation()
-  const section = (SECTIONS.find((s) => s.value === query.get('bolum'))?.value ?? 'memory') as Section
+  const tabs = sections()
+  const section = (tabs.find((s) => s.value === query.get('bolum'))?.value ?? 'memory') as Section
   const { data, error } = useApi<EnvReport>('/api/env')
 
   return (
     <div className="mx-auto max-w-[1280px] space-y-5">
       <header>
-        <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">Ortam</h1>
-        <p className="text-[14px] text-ink-2">Claude Code'un bu bilgisayarda hatırladıkları, uyduğu talimatlar, yarım kalan işler, kullandığı araçlar ve ayarlar.</p>
+        <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">{tx('Ortam', 'Environment')}</h1>
+        <p className="text-[14px] text-ink-2">
+          {tx(
+            "Claude Code'un bu bilgisayarda hatırladıkları, uyduğu talimatlar, yarım kalan işler, kullandığı araçlar ve ayarlar.",
+            'What Claude Code remembers on this computer, the instructions it follows, unfinished work, the tools it uses, and its settings.',
+          )}
+        </p>
       </header>
-      <nav aria-label="Ortam bölümleri" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+      <nav aria-label={tx('Ortam bölümleri', 'Environment sections')} className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
         <div className="inline-flex gap-1 rounded-lg border border-line bg-surface p-0.5">
-          {SECTIONS.map((s) => {
+          {tabs.map((s) => {
             const href = `/ortam?bolum=${s.value}`
             const count = data ? s.count(data) : null
             return (
@@ -70,8 +77,15 @@ export function Environment() {
 
 // ---- files -------------------------------------------------------------------------------------
 
-const MEMORY_LABEL: Record<MemoryType, string> = {
-  user: 'Kullanıcı', feedback: 'Geri bildirim', project: 'Proje', reference: 'Referans', index: 'Dizin', other: 'Diğer',
+function memoryLabel(type: MemoryType): string {
+  return {
+    user: tx('Kullanıcı', 'User'),
+    feedback: tx('Geri bildirim', 'Feedback'),
+    project: tx('Proje', 'Project'),
+    reference: tx('Referans', 'Reference'),
+    index: tx('Dizin', 'Index'),
+    other: tx('Diğer', 'Other'),
+  }[type]
 }
 const MEMORY_COLOR: Partial<Record<MemoryType, string>> = {
   user: 'var(--cat-1)', feedback: 'var(--cat-2)', project: 'var(--cat-3)', reference: 'var(--cat-4)',
@@ -82,22 +96,30 @@ function MemorySection({ r }: { r: EnvReport }) {
   const [text, setText] = useState('')
   const [open, setOpen] = useState<string | null>(null)
   const files = useMemo(() => {
-    const needle = text.trim().toLocaleLowerCase('tr')
+    const needle = text.trim().toLocaleLowerCase(getLang())
     return r.memory.filter(
       (m) => (type === 'all' ? m.type !== 'index' : m.type === type) &&
-        (!needle || `${m.name} ${m.description ?? ''} ${m.projectName}`.toLocaleLowerCase('tr').includes(needle)),
+        (!needle || `${m.name} ${m.description ?? ''} ${m.projectName}`.toLocaleLowerCase(getLang()).includes(needle)),
     )
   }, [r.memory, type, text])
   const present = (['user', 'feedback', 'project', 'reference', 'other', 'index'] as MemoryType[]).filter((t) => r.memory.some((m) => m.type === t))
   if (r.memory.length === 0) {
-    return <Empty title="Henüz memory dosyası yok" body="Claude Code bir şeyi hatırlamaya karar verdiğinde ~/.claude/projects/<proje>/memory klasörüne yazar; o dosyalar burada görünür." />
+    return (
+      <Empty
+        title={tx('Henüz memory dosyası yok', 'No memory files yet')}
+        body={tx(
+          'Claude Code bir şeyi hatırlamaya karar verdiğinde ~/.claude/projects/<proje>/memory klasörüne yazar; o dosyalar burada görünür.',
+          'When Claude Code decides to remember something, it writes it to ~/.claude/projects/<project>/memory. Those files show up here.',
+        )}
+      />
+    )
   }
   const selected = files.find((f) => f.id === open) ?? files[0] ?? null
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
       <div className="min-w-0 space-y-3">
-        <div role="radiogroup" aria-label="Tür" className="flex flex-wrap gap-1.5">
-          {[{ value: 'all' as const, label: 'Tümü' }, ...present.map((t) => ({ value: t, label: MEMORY_LABEL[t] }))].map((o) => (
+        <div role="radiogroup" aria-label={tx('Tür', 'Type')} className="flex flex-wrap gap-1.5">
+          {[{ value: 'all' as const, label: tx('Tümü', 'All') }, ...present.map((t) => ({ value: t, label: memoryLabel(t) }))].map((o) => (
             <button
               key={o.value}
               type="button"
@@ -114,8 +136,8 @@ function MemorySection({ r }: { r: EnvReport }) {
             </button>
           ))}
         </div>
-        <SearchBox value={text} onChange={setText} placeholder="Adda, açıklamada ya da projede ara" />
-        <p className="text-[12px] text-ink-3 num">{fmtInt(files.length)} dosya</p>
+        <SearchBox value={text} onChange={setText} placeholder={tx('Adda, açıklamada ya da projede ara', 'Search names, descriptions, and projects')} />
+        <p className="text-[12px] text-ink-3 num">{fmtCount(files.length, 'dosya', 'file')}</p>
         <ul className="overflow-hidden rounded-xl border border-line bg-surface">
           {files.map((m) => (
             <li key={m.id} className="border-t border-line first:border-t-0">
@@ -131,13 +153,13 @@ function MemorySection({ r }: { r: EnvReport }) {
                 </span>
                 {m.description ? <span className="mt-0.5 line-clamp-2 block text-[12px] text-ink-2">{m.description}</span> : null}
                 <span className="mt-0.5 block text-[11px] text-ink-3">
-                  {MEMORY_LABEL[m.type]} · {m.projectName} · {fmtRelative(m.mtime)}
+                  {memoryLabel(m.type)} · {m.projectName} · {fmtRelative(m.mtime)}
                 </span>
               </button>
               {/* On narrow screens the file opens right under the row tapped, not below the whole list. */}
               {open === m.id ? (
                 <div className="border-t border-line p-2 lg:hidden">
-                  <FilePreview id={m.id} file={m.file} meta={`${MEMORY_LABEL[m.type]} · ${m.projectName} · ${fmtDateTime(m.mtime)}`} />
+                  <FilePreview id={m.id} file={m.file} meta={`${memoryLabel(m.type)} · ${m.projectName} · ${fmtDateTime(m.mtime)}`} />
                 </div>
               ) : null}
             </li>
@@ -146,7 +168,7 @@ function MemorySection({ r }: { r: EnvReport }) {
       </div>
       {selected ? (
         <div className="hidden min-w-0 lg:block">
-          <FilePreview id={selected.id} file={selected.file} meta={`${MEMORY_LABEL[selected.type]} · ${selected.projectName} · ${fmtDateTime(selected.mtime)}`} />
+          <FilePreview id={selected.id} file={selected.file} meta={`${memoryLabel(selected.type)} · ${selected.projectName} · ${fmtDateTime(selected.mtime)}`} />
         </div>
       ) : null}
     </div>
@@ -156,7 +178,15 @@ function MemorySection({ r }: { r: EnvReport }) {
 function InstructionsSection({ r }: { r: EnvReport }) {
   const [open, setOpen] = useState<string | null>(null)
   if (r.instructions.length === 0) {
-    return <Empty title="CLAUDE.md dosyası bulunamadı" body="~/.claude/CLAUDE.md ya da proje kökündeki CLAUDE.md, Claude Code'a her oturumda verilen talimatlardır. Oluşturduğunda burada görünür." />
+    return (
+      <Empty
+        title={tx('CLAUDE.md dosyası bulunamadı', 'No CLAUDE.md files found')}
+        body={tx(
+          "~/.claude/CLAUDE.md ya da proje kökündeki CLAUDE.md, Claude Code'a her oturumda verilen talimatlardır. Oluşturduğunda burada görünür.",
+          "~/.claude/CLAUDE.md and the CLAUDE.md at a project's root hold the instructions Claude Code gets in every session. Once you create one, it shows up here.",
+        )}
+      />
+    )
   }
   const selected = r.instructions.find((f) => f.id === open) ?? r.instructions[0]
   return (
@@ -172,7 +202,7 @@ function InstructionsSection({ r }: { r: EnvReport }) {
             >
               <span className="block text-[14px] font-medium">{f.scope}</span>
               <span className="block truncate font-mono text-[11px] text-ink-3">{f.file}</span>
-              <span className="block text-[11px] text-ink-3 num">{fmtInt(f.size)} bayt · {fmtRelative(f.mtime)}</span>
+              <span className="block text-[11px] text-ink-3 num">{fmtCount(f.size, 'bayt', 'byte')} · {fmtRelative(f.mtime)}</span>
             </button>
             {open === f.id ? (
               <div className="border-t border-line p-2 lg:hidden">
@@ -212,7 +242,9 @@ function FilePreview({ id, file, meta }: { id: string; file: string; meta: strin
                 {data.text.replace(/^---\n[\s\S]*?\n---\n?/, '')}
               </ReactMarkdown>
             </div>
-            {data.truncated ? <p className="mt-3 text-[12px] text-ink-3">Dosya uzun; ilk 200 bin karakteri gösteriliyor.</p> : null}
+            {data.truncated ? <p className="mt-3 text-[12px] text-ink-3">
+                {tx('Dosya uzun; ilk 200 bin karakteri gösteriliyor.', 'This file is long, so only the first 200,000 characters are shown.')}
+              </p> : null}
           </>
         ) : null}
       </div>
@@ -222,12 +254,12 @@ function FilePreview({ id, file, meta }: { id: string; file: string; meta: strin
 
 // ---- tasks and plans ---------------------------------------------------------------------------
 
-const STATUS: Record<TaskStatus, { label: string; icon: typeof Circle; className: string }> = {
-  pending: { label: 'bekliyor', icon: Circle, className: 'text-ink-3' },
-  in_progress: { label: 'devam ediyor', icon: CircleDot, className: 'text-accent' },
-  completed: { label: 'tamamlandı', icon: CheckCircle2, className: 'text-good' },
-  deleted: { label: 'silindi', icon: Circle, className: 'text-ink-3' },
-}
+const taskStatus = (): Record<TaskStatus, { label: string; icon: typeof Circle; className: string }> => ({
+  pending: { label: tx('bekliyor', 'pending'), icon: Circle, className: 'text-ink-3' },
+  in_progress: { label: tx('devam ediyor', 'in progress'), icon: CircleDot, className: 'text-accent' },
+  completed: { label: tx('tamamlandı', 'completed'), icon: CheckCircle2, className: 'text-good' },
+  deleted: { label: tx('silindi', 'deleted'), icon: Circle, className: 'text-ink-3' },
+})
 
 function TasksSection({ r }: { r: EnvReport }) {
   const [filter, setFilter] = useState<'open' | 'all'>('open')
@@ -235,21 +267,27 @@ function TasksSection({ r }: { r: EnvReport }) {
     .map((g) => ({ ...g, tasks: filter === 'open' ? g.tasks.filter((t) => t.status !== 'completed') : g.tasks }))
     .filter((g) => g.tasks.length > 0)
   const openCount = r.tasks.reduce((s, g) => s + g.tasks.filter((t) => t.status !== 'completed').length, 0)
+  const status = taskStatus()
   return (
     <div className="space-y-6">
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-2">
-          <h2 className="text-[13px] font-medium">Görev listeleri</h2>
+          <h2 className="text-[13px] font-medium">{tx('Görev listeleri', 'Task lists')}</h2>
           <Segmented<'open' | 'all'>
-            label="Görev filtresi"
+            label={tx('Görev filtresi', 'Task filter')}
             value={filter}
             onChange={setFilter}
-            options={[{ value: 'open', label: `Açık (${openCount})` }, { value: 'all', label: 'Tümü' }]}
+            options={[
+              { value: 'open', label: tx(`Açık (${openCount})`, `Open (${openCount})`) },
+              { value: 'all', label: tx('Tümü', 'All') },
+            ]}
           />
         </div>
         {groups.length === 0 ? (
           <p className="px-5 pb-5 text-ink-2">
-            {r.tasks.length === 0 ? 'Claude Code henüz bir görev listesi tutmamış.' : 'Açık görev yok; listelerdeki her iş tamamlanmış.'}
+            {r.tasks.length === 0
+              ? tx('Claude Code henüz bir görev listesi tutmamış.', "Claude Code hasn't kept a task list yet.")
+              : tx('Açık görev yok; listelerdeki her iş tamamlanmış.', 'No open tasks. Everything on the lists is done.')}
           </p>
         ) : (
           <ul className="px-5 pb-4">
@@ -261,7 +299,7 @@ function TasksSection({ r }: { r: EnvReport }) {
                 </a>
                 <ul className="mt-1.5 space-y-1">
                   {g.tasks.map((t) => {
-                    const s = STATUS[t.status]
+                    const s = status[t.status]
                     return (
                       <li key={t.id} className="flex items-start gap-2 text-[13px]">
                         <s.icon className={cx('mt-0.5 size-3.5 shrink-0', s.className)} aria-label={s.label} />
@@ -276,9 +314,9 @@ function TasksSection({ r }: { r: EnvReport }) {
         )}
       </Card>
       <Card>
-        <CardHeader title="Planlar" aside={r.plans.length ? `${r.plans.length} plan` : null} />
+        <CardHeader title={tx('Planlar', 'Plans')} aside={r.plans.length ? fmtCount(r.plans.length, 'plan', 'plan') : null} />
         {r.plans.length === 0 ? (
-          <p className="px-5 pb-5 text-ink-2">Plan mode'da onaya sunulmuş bir plan yok.</p>
+          <p className="px-5 pb-5 text-ink-2">{tx("Plan mode'da onaya sunulmuş bir plan yok.", 'No plans have been submitted for approval in plan mode.')}</p>
         ) : (
           <ul className="px-5 pb-4">{r.plans.map((p) => <PlanRow key={p.key} p={p} />)}</ul>
         )}
@@ -287,14 +325,14 @@ function TasksSection({ r }: { r: EnvReport }) {
   )
 }
 
-const OUTCOME: Record<PlanItem['outcome'], { label: string; className: string }> = {
-  approved: { label: 'Onaylandı', className: 'bg-[color-mix(in_srgb,var(--good)_14%,transparent)] text-good' },
-  rejected: { label: 'Değişiklik istendi', className: 'bg-danger-soft text-danger' },
-  unknown: { label: 'Yanıt yok', className: 'bg-raised text-ink-3' },
-}
+const planOutcome = (): Record<PlanItem['outcome'], { label: string; className: string }> => ({
+  approved: { label: tx('Onaylandı', 'Approved'), className: 'bg-[color-mix(in_srgb,var(--good)_14%,transparent)] text-good' },
+  rejected: { label: tx('Değişiklik istendi', 'Changes requested'), className: 'bg-danger-soft text-danger' },
+  unknown: { label: tx('Yanıt yok', 'No response'), className: 'bg-raised text-ink-3' },
+})
 
 function PlanRow({ p }: { p: PlanItem }) {
-  const o = OUTCOME[p.outcome]
+  const o = planOutcome()[p.outcome]
   return (
     <li className="border-t border-line py-2 first:border-t-0">
       <details className="group">
@@ -326,9 +364,9 @@ function SkillsSection({ r }: { r: EnvReport }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <Card>
-        <CardHeader title="Skill'ler" aside="kullanıma göre" />
+        <CardHeader title={tx("Skill'ler", 'Skills')} aside={tx('kullanıma göre', 'by usage')} />
         {r.skills.length === 0 ? (
-          <p className="px-5 pb-5 text-ink-2">Kurulu ya da kullanılmış bir skill yok.</p>
+          <p className="px-5 pb-5 text-ink-2">{tx('Kurulu ya da kullanılmış bir skill yok.', 'No skills installed or used.')}</p>
         ) : (
           <div className="overflow-x-auto px-5 pb-4">
             <table className="w-full min-w-[460px] table-fixed text-[13px]">
@@ -341,9 +379,9 @@ function SkillsSection({ r }: { r: EnvReport }) {
               <thead>
                 <tr className="text-left text-[12px] text-ink-3">
                   <th className="pb-2 font-normal">Skill</th>
-                  <th className="pb-2 font-normal">Kaynak</th>
-                  <th className="pb-2 text-right font-normal">Kullanım</th>
-                  <th className="pb-2 text-right font-normal">Son</th>
+                  <th className="pb-2 font-normal">{tx('Kaynak', 'Source')}</th>
+                  <th className="pb-2 text-right font-normal">{tx('Kullanım', 'Uses')}</th>
+                  <th className="pb-2 text-right font-normal">{tx('Son', 'Last used')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -365,9 +403,9 @@ function SkillsSection({ r }: { r: EnvReport }) {
       </Card>
       <div className="space-y-6">
         <Card>
-          <CardHeader title="Plugin'ler" />
+          <CardHeader title={tx("Plugin'ler", 'Plugins')} />
           {r.plugins.length === 0 ? (
-            <p className="px-5 pb-5 text-ink-2">Kurulu plugin yok.</p>
+            <p className="px-5 pb-5 text-ink-2">{tx('Kurulu plugin yok.', 'No plugins installed.')}</p>
           ) : (
             <ul className="px-5 pb-4">
               {r.plugins.map((p) => (
@@ -375,22 +413,22 @@ function SkillsSection({ r }: { r: EnvReport }) {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px]">{p.name}</span>
                     <span className="text-[12px] text-ink-3">
-                      {[p.marketplace, p.version ? `v${p.version}` : null, p.installedAt ? `${fmtRelative(p.installedAt)} kuruldu` : null].filter(Boolean).join(' · ')}
+                      {[p.marketplace, p.version ? `v${p.version}` : null, p.installedAt ? tx(`${fmtRelative(p.installedAt)} kuruldu`, `installed ${fmtRelative(p.installedAt)}`) : null].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                   <span className={cx('rounded px-1.5 py-0.5 text-[11px]', p.enabled ? 'bg-accent-soft text-accent' : 'bg-raised text-ink-3')}>
-                    {p.enabled ? 'açık' : 'kapalı'}
+                    {p.enabled ? tx('açık', 'enabled') : tx('kapalı', 'disabled')}
                   </span>
-                  <span className="w-16 text-right font-mono text-[12px] text-ink-2 num">{fmtInt(p.uses)} kez</span>
+                  <span className="w-16 text-right font-mono text-[12px] text-ink-2 num">{fmtCount(p.uses, 'kez', 'use')}</span>
                 </li>
               ))}
             </ul>
           )}
         </Card>
         <Card>
-          <CardHeader title="Subagent türleri" aside="Claude'un başlattığı" />
+          <CardHeader title={tx('Subagent türleri', 'Subagent types')} aside={tx("Claude'un başlattığı", 'started by Claude')} />
           <div className="px-5 pb-5">
-            {r.subagents.length ? <HBars format={fmtInt} items={r.subagents.map((s) => ({ label: s.type, value: s.calls }))} /> : <p className="text-ink-2">Subagent başlatılmamış.</p>}
+            {r.subagents.length ? <HBars format={fmtInt} items={r.subagents.map((s) => ({ label: s.type, value: s.calls }))} /> : <p className="text-ink-2">{tx('Subagent başlatılmamış.', 'No subagents started.')}</p>}
           </div>
         </Card>
       </div>
@@ -401,12 +439,16 @@ function SkillsSection({ r }: { r: EnvReport }) {
 function McpSection({ r }: { r: EnvReport }) {
   return (
     <Card>
-      <CardHeader title="MCP sunucuları" aside={`${r.mcp.length} sunucu`} />
+      <CardHeader title={tx('MCP sunucuları', 'MCP servers')} aside={fmtCount(r.mcp.length, 'sunucu', 'server')} />
       <p className="flex items-center gap-1.5 px-5 pb-3 text-[12px] text-ink-3">
-        <Lock className="size-3.5 shrink-0" aria-hidden /> Ortam değişkenleri, başlıklar ve komut argümanları gizli bilgi taşıyabileceği için gösterilmez.
+        <Lock className="size-3.5 shrink-0" aria-hidden />{' '}
+        {tx(
+          'Ortam değişkenleri, başlıklar ve komut argümanları gizli bilgi taşıyabileceği için gösterilmez.',
+          "Environment variables, headers, and command arguments aren't shown because they can contain secrets.",
+        )}
       </p>
       {r.mcp.length === 0 ? (
-        <p className="px-5 pb-5 text-ink-2">Yapılandırılmış ya da kullanılmış bir MCP sunucusu yok.</p>
+        <p className="px-5 pb-5 text-ink-2">{tx('Yapılandırılmış ya da kullanılmış bir MCP sunucusu yok.', 'No MCP servers configured or used.')}</p>
       ) : (
         <div className="overflow-x-auto px-5 pb-4">
           <table className="w-full min-w-[720px] table-fixed text-[13px]">
@@ -419,11 +461,11 @@ function McpSection({ r }: { r: EnvReport }) {
             </colgroup>
             <thead>
               <tr className="text-left text-[12px] text-ink-3">
-                <th className="pb-2 font-normal">Sunucu</th>
-                <th className="pb-2 font-normal">Nerede tanımlı</th>
-                <th className="pb-2 font-normal">Çalıştırılan</th>
-                <th className="pb-2 text-right font-normal">Çağrı</th>
-                <th className="pb-2 text-right font-normal">Son</th>
+                <th className="pb-2 font-normal">{tx('Sunucu', 'Server')}</th>
+                <th className="pb-2 font-normal">{tx('Nerede tanımlı', 'Defined in')}</th>
+                <th className="pb-2 font-normal">{tx('Çalıştırılan', 'Command or host')}</th>
+                <th className="pb-2 text-right font-normal">{tx('Çağrı', 'Calls')}</th>
+                <th className="pb-2 text-right font-normal">{tx('Son', 'Last used')}</th>
               </tr>
             </thead>
             <tbody>
@@ -440,9 +482,9 @@ function McpSection({ r }: { r: EnvReport }) {
                   </td>
                   <td className="py-2 text-right font-mono text-[12px] num">
                     {fmtInt(m.calls)}
-                    {m.errors ? <span className="block text-[11px] text-danger">{fmtInt(m.errors)} hata</span> : null}
+                    {m.errors ? <span className="block text-[11px] text-danger">{fmtCount(m.errors, 'hata', 'error')}</span> : null}
                   </td>
-                  <td className="py-2 text-right text-[12px] whitespace-nowrap text-ink-3">{m.lastUsedAt ? fmtRelative(m.lastUsedAt) : 'hiç'}</td>
+                  <td className="py-2 text-right text-[12px] whitespace-nowrap text-ink-3">{m.lastUsedAt ? fmtRelative(m.lastUsedAt) : tx('hiç', 'never')}</td>
                 </tr>
               ))}
             </tbody>
@@ -457,14 +499,28 @@ function McpSection({ r }: { r: EnvReport }) {
 
 function SettingsSection({ r }: { r: EnvReport }) {
   const s = r.settings
-  if (!s.file) return <Empty title="Ayar dosyası yok" body="~/.claude/settings.json bulunamadı; Claude Code varsayılan ayarlarla çalışıyor." />
-  const rules: [string, string[]][] = [['İzin verilen', s.allow], ['Sorulacak', s.ask], ['Yasak', s.deny]]
+  if (!s.file) {
+    return (
+      <Empty
+        title={tx('Ayar dosyası yok', 'No settings file')}
+        body={tx(
+          '~/.claude/settings.json bulunamadı; Claude Code varsayılan ayarlarla çalışıyor.',
+          "~/.claude/settings.json wasn't found, so Claude Code is running with default settings.",
+        )}
+      />
+    )
+  }
+  const rules: [string, string[]][] = [
+    [tx('İzin verilen', 'Allow'), s.allow],
+    [tx('Sorulacak', 'Ask'), s.ask],
+    [tx('Yasak', 'Deny'), s.deny],
+  ]
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card>
-        <CardHeader title="Genel" aside={<span className="font-mono">{s.file}</span>} />
+        <CardHeader title={tx('Genel', 'General')} aside={<span className="font-mono">{s.file}</span>} />
         <dl className="px-5 pb-4">
-          {s.values.length === 0 ? <p className="text-ink-2">Varsayılanların dışında bir değer yok.</p> : null}
+          {s.values.length === 0 ? <p className="text-ink-2">{tx('Varsayılanların dışında bir değer yok.', 'Nothing is set beyond the defaults.')}</p> : null}
           {s.values.map((v) => (
             <div key={v.key} className="flex items-baseline justify-between gap-4 border-t border-line py-2 first:border-t-0">
               <dt className="font-mono text-[12px] text-ink-2">{v.key}</dt>
@@ -476,13 +532,13 @@ function SettingsSection({ r }: { r: EnvReport }) {
           <div className="space-y-2 border-t border-line px-5 py-4 text-[12px]">
             {s.envKeys.length ? (
               <p className="text-ink-2">
-                <span className="text-ink-3">Ortam değişkenleri (yalnızca adları): </span>
+                <span className="text-ink-3">{tx('Ortam değişkenleri (yalnızca adları): ', 'Environment variables (names only): ')}</span>
                 <span className="font-mono">{s.envKeys.join(', ')}</span>
               </p>
             ) : null}
             {s.otherKeys.length ? (
               <p className="text-ink-2">
-                <span className="text-ink-3">Değeri gösterilmeyen ayarlar: </span>
+                <span className="text-ink-3">{tx('Değeri gösterilmeyen ayarlar: ', 'Settings with hidden values: ')}</span>
                 <span className="font-mono">{s.otherKeys.join(', ')}</span>
               </p>
             ) : null}
@@ -491,9 +547,9 @@ function SettingsSection({ r }: { r: EnvReport }) {
       </Card>
       <div className="space-y-6">
         <Card>
-          <CardHeader title="İzin kuralları" />
+          <CardHeader title={tx('İzin kuralları', 'Permission rules')} />
           <div className="space-y-3 px-5 pb-5">
-            {rules.every(([, list]) => list.length === 0) ? <p className="text-ink-2">Tanımlı izin kuralı yok.</p> : null}
+            {rules.every(([, list]) => list.length === 0) ? <p className="text-ink-2">{tx('Tanımlı izin kuralı yok.', 'No permission rules defined.')}</p> : null}
             {rules.filter(([, list]) => list.length).map(([label, list]) => (
               <div key={label}>
                 <p className="mb-1 text-[12px] text-ink-3">{label}</p>
@@ -507,9 +563,9 @@ function SettingsSection({ r }: { r: EnvReport }) {
           </div>
         </Card>
         <Card>
-          <CardHeader title="Hook'lar" />
+          <CardHeader title={tx("Hook'lar", 'Hooks')} />
           {s.hooks.length === 0 ? (
-            <p className="px-5 pb-5 text-ink-2">Tanımlı hook yok.</p>
+            <p className="px-5 pb-5 text-ink-2">{tx('Tanımlı hook yok.', 'No hooks defined.')}</p>
           ) : (
             <ul className="px-5 pb-4">
               {s.hooks.map((h, i) => (

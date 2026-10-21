@@ -2,9 +2,15 @@
 // projects over the last five months, plus the settings, memory, skills and MCP config around them.
 // The sessions follow the stories in stories.ts, so what a visitor reads holds together. Nothing
 // here comes from a real machine; a fixed seed makes every build produce the same data.
+//
+// The demo exists in Turkish and English. The English stories mirror the Turkish ones one to one,
+// and nothing below draws a random number based on the text, so both languages get the same
+// sessions, ids, times and costs; only the words differ.
 import fs from 'node:fs'
 import path from 'node:path'
+import { type Lang, pick } from '../../shared/i18n.ts'
 import { Pricing } from '../../server/pricing.ts'
+import { CLAUDE_MD_WEB_EN, ROUTINE_PR_EN, ROUTINE_TESTS_EN, STORIES_EN } from './stories.en.ts'
 import { CLAUDE_MD_WEB, type Edit, type ProjectStories, type Question, ROUTINE_PR, ROUTINE_TESTS, STORIES, type Story } from './stories.ts'
 
 type Json = Record<string, unknown>
@@ -49,14 +55,21 @@ const FEATURED = 'carsi-web'
 
 /** Stories set up for the two sessions still running when the demo is built. */
 const TODAY = ['Ürün sayfasının LCP süresi', 'API istemcisinde zaman aşımı']
+/** The same stories by position, which the English set shares: "project:story". */
+const TODAY_AT = TODAY.map((title) => {
+  const p = STORIES.findIndex((x) => x.stories.some((s) => s.title === title))
+  return `${p}:${STORIES[p]?.stories.findIndex((s) => s.title === title)}`
+})
 
 export interface DemoOptions {
   home: string
   now: Date
   seed?: number
+  lang?: Lang
 }
 
-export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): void {
+export function generateDemoHome({ home, now, seed = 20261021, lang = 'tr' }: DemoOptions): void {
+  const L = <T>(tr: T, en: T) => pick(lang, tr, en)
   const r = rng(seed)
   const pricing = new Pricing()
   const claude = path.join(home, '.claude')
@@ -75,21 +88,22 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
   }
 
   // ---- schedule ---------------------------------------------------------------------------------
-  const projects = plain(STORIES)
-  type Work = { project: ProjectStories; story: Story | null; question: Question | null; review?: boolean }
+  const projects = plain(L(STORIES, STORIES_EN))
+  type Work = { project: ProjectStories; story: Story | null; question: Question | null; review?: boolean; at?: string }
   const work: Work[] = []
-  for (const p of projects) {
-    for (const story of p.stories) work.push({ project: p, story, question: null })
+  projects.forEach((p, pi) => {
+    p.stories.forEach((story, si) => work.push({ project: p, story, question: null, at: `${pi}:${si}` }))
     for (const question of p.questions) work.push({ project: p, story: null, question })
-  }
+  })
+  const isToday = (w: Work) => TODAY_AT.includes(w.at ?? '')
   // Interleave projects, then let the busier, more eventful stories fall in the recent months.
   const eventful = (w: Work) => (w.story ? Number(!!w.story.bigContext) + Number(!!w.story.interrupt) + Number(!!w.story.zshGlob) + Number(!!w.story.blocked) : 0)
   const ordered = work
     .map((w) => ({ w, key: r.next() + eventful(w) * 0.35 }))
     .sort((a, b) => a.key - b.key)
     .map((x) => x.w)
-    .filter((w) => !TODAY.includes(w.story?.title ?? ''))
-  const today = work.filter((w) => TODAY.includes(w.story?.title ?? ''))
+    .filter((w) => !isToday(w))
+  const today = work.filter(isToday)
 
   const span = 150
   const startDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() - span)
@@ -195,7 +209,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
       const snippet = p.snippets[file] ?? (story?.edits.find((e) => e.file === file)?.old || `// ${file}`)
       const lines = snippet.split('\n').map((l, i) => `${String(i + 1).padStart(6)}\t${l}`).join('\n')
       // The whole file goes into the context, not just the lines shown here.
-      tool('Read', { file_path: path.join(cwd, file) }, lines, { lead: r.chance(0.4) ? `${path.basename(file)} dosyasına bakıyorum.` : undefined, output: r.int(40, 140), grow: big ? r.int(7_000, 16_000) : r.int(3_000, 10_000) })
+      tool('Read', { file_path: path.join(cwd, file) }, lines, { lead: r.chance(0.4) ? L(`${path.basename(file)} dosyasına bakıyorum.`, `Looking at ${path.basename(file)}.`) : undefined, output: r.int(40, 140), grow: big ? r.int(7_000, 16_000) : r.int(3_000, 10_000) })
     }
     /** Files of this project other stories touch: what Claude looks at around the task. */
     const pool = [...new Set(p.stories.flatMap((x) => [...x.read, ...x.edits.map((e) => e.file)]))]
@@ -213,7 +227,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
       // Claude reaches for GNU timeout now and then; this Mac doesn't have it.
       if (r.chance(0.07) && !command.startsWith('git')) {
         tool('Bash', { command: `timeout 120 ${command}`, description: command }, 'Exit code 127\n(eval):1: command not found: timeout', { isError: true, lead: o.lead })
-        tool('Bash', { command, description: command }, out, { isError: o.isError, lead: 'Bu makinede timeout yok; komutu doğrudan çalıştırıyorum.', took: o.took })
+        tool('Bash', { command, description: command }, out, { isError: o.isError, lead: L('Bu makinede timeout yok; komutu doğrudan çalıştırıyorum.', "timeout isn't installed on this machine; running the command directly."), took: o.took })
         return
       }
       tool('Bash', { command, description: command }, out, { isError: o.isError, lead: o.lead, took: o.took, grow: r.int(800, 3_000) })
@@ -237,10 +251,10 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
       // An unquoted glob: zsh refuses it before grep ever runs. Claude does this more than once.
       if (forceZsh || r.chance(0.3)) {
         tool('Bash', { command: `grep -rn "${pattern}" --include=*.${ext} .` }, `Exit code 1\n(eval):1: no matches found: --include=*.${ext}`, { isError: true })
-        tool('Grep', { pattern, path: cwd }, `Found ${r.int(2, 9)} files`, { lead: 'zsh glob’u açmadan reddetti; Grep aracıyla arıyorum.'.replaceAll('’', "'") })
+        tool('Grep', { pattern, path: cwd }, `Found ${r.int(2, 9)} files`, { lead: L("zsh glob'u açmadan reddetti; Grep aracıyla arıyorum.", 'zsh rejected the unquoted glob; searching with the Grep tool instead.') })
         return
       }
-      tool('Grep', { pattern, path: cwd }, `Found ${r.int(2, 9)} files`, { lead: `${pattern} nerelerde kullanılıyor, bakıyorum.` })
+      tool('Grep', { pattern, path: cwd }, `Found ${r.int(2, 9)} files`, { lead: L(`${pattern} nerelerde kullanılıyor, bakıyorum.`, `Checking where ${pattern} is used.`) })
     }
     const todo = (items: string[], done: number) =>
       tool('TodoWrite', { todos: items.map((content, i) => ({ content, status: i < done ? 'completed' : i === done ? 'in_progress' : 'pending', activeForm: content })) }, 'Todos have been modified successfully.')
@@ -259,12 +273,12 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
     if (w.review && story?.review && pr) {
       const rv = story.review
       turns.push({
-        prompt: `PR #${pr.number}'e gelen review yorumlarını uygula`,
+        prompt: L(`PR #${pr.number}'e gelen review yorumlarını uygula`, `Address the review comments on PR #${pr.number}`),
         run: () => {
           const [owner, repo] = p.repo.split('/')
-          tool('mcp__github__get_pull_request_comments', { owner, repo, pull_number: pr.number }, rv.comment, { lead: `PR #${pr.number} yorumlarını okuyorum.` })
+          tool('mcp__github__get_pull_request_comments', { owner, repo, pull_number: pr.number }, rv.comment, { lead: L(`PR #${pr.number} yorumlarını okuyorum.`, `Reading the comments on PR #${pr.number}.`) })
           read(rv.edit.file)
-          edit(rv.edit, 'Yorumu uyguluyorum.')
+          edit(rv.edit, L('Yorumu uyguluyorum.', 'Applying the comment.'))
           bash(story.test.command, story.test.pass)
           bash(`git commit -am "Review: ${story.title}" && git push`, `[${branch} ${id('').slice(-7)}] Review: ${story.title}\n 1 file changed`)
           say(rv.reply)
@@ -278,11 +292,11 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
       turns.push({
         prompt: s.issue ? `${s.issue.id}: ${s.prompt}` : s.prompt,
         run: () => {
-          if (s.issue) tool('mcp__linear__get_issue', { id: s.issue.id }, s.issue.text, { lead: `${s.issue.id} kaydını okuyorum.` })
+          if (s.issue) tool('mcp__linear__get_issue', { id: s.issue.id }, s.issue.text, { lead: L(`${s.issue.id} kaydını okuyorum.`, `Reading ${s.issue.id}.`) })
           if (s.todos) todo(s.todos, 0)
           if (s.explore) {
             const agentId = `a${id('').slice(-12)}`
-            tool('Agent', { description: 'İlgili kodu bul', prompt: s.prompt, subagent_type: 'Explore' }, s.explore, { took: r.int(20, 60) * 1000 })
+            tool('Agent', { description: L('İlgili kodu bul', 'Find the relevant code'), prompt: s.prompt, subagent_type: 'Explore' }, s.explore, { took: r.int(20, 60) * 1000 })
             const sub: Json[] = []
             let at = t - 40_000
             for (const f of s.read) {
@@ -300,34 +314,34 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
           const around = related([...s.read, ...s.edits.map((e) => e.file)], s.bigContext ? r.int(10, 16) : r.int(2, 5))
           for (const f of around) read(f, s.bigContext)
           if (s.grep) grep(s.grep, s.zshGlob)
-          if (s.web) tool(s.web.kind === 'search' ? 'WebSearch' : 'WebFetch', s.web.kind === 'search' ? { query: s.web.value } : { url: s.web.value, prompt: 'Kırılan değişiklikler neler?' }, s.web.result, { webSearch: s.web.kind === 'search', took: 6000 })
+          if (s.web) tool(s.web.kind === 'search' ? 'WebSearch' : 'WebFetch', s.web.kind === 'search' ? { query: s.web.value } : { url: s.web.value, prompt: L('Kırılan değişiklikler neler?', 'What are the breaking changes?') }, s.web.result, { webSearch: s.web.kind === 'search', took: 6000 })
           if (s.skill) tool('Skill', { skill: s.skill }, `Launching skill: ${s.skill}`)
-          if (s.ask) tool('AskUserQuestion', { questions: [{ question: s.ask.question, header: 'Karar', options: s.ask.options.map((label) => ({ label })) }] }, `User has answered your questions: "${s.ask.question}"="${s.ask.answer}"`, { took: r.int(30, 120) * 1000 })
+          if (s.ask) tool('AskUserQuestion', { questions: [{ question: s.ask.question, header: L('Karar', 'Decision'), options: s.ask.options.map((label) => ({ label })) }] }, `User has answered your questions: "${s.ask.question}"="${s.ask.answer}"`, { took: r.int(30, 120) * 1000 })
           if (s.plan) tool('ExitPlanMode', { plan: s.plan }, 'User has approved your plan. You can now start coding.', { took: r.int(40, 180) * 1000 })
-          if (s.test.fail) bash(s.test.command, s.test.fail, { isError: true, lead: 'Önce hatayı yeniden üretiyorum.' })
+          if (s.test.fail) bash(s.test.command, s.test.fail, { isError: true, lead: L('Önce hatayı yeniden üretiyorum.', 'Reproducing the failure first.') })
           if (s.interrupt) {
             const i = s.interrupt
             tool('Edit', { file_path: path.join(cwd, i.file), old_string: '…', new_string: '…' },
               "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.",
-              { isError: true, lead: `Kapanma mantığını ${path.basename(i.file)} içinde düzeltiyorum.`, extra: { toolDenialKind: 'interrupted' } })
+              { isError: true, lead: L(`Kapanma mantığını ${path.basename(i.file)} içinde düzeltiyorum.`, `Fixing the close logic in ${path.basename(i.file)}.`), extra: { toolDenialKind: 'interrupted' } })
             records.push({ type: 'user', uuid: uuid(), ...base(t + 1500), message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } })
             prompt(i.prompt)
             read(s.edits[0]?.file ?? i.file)
           }
           if (s.blocked) {
-            tool('Bash', { command: s.blocked.command }, 'Permission to use Bash with command ' + s.blocked.command + ' has been denied by auto mode.', { isError: true, lead: 'Eski derleme önbelleğini temizliyorum.', extra: { toolDenialKind: 'automode-blocked' } })
-            bash(s.blocked.instead, 'Cleaned .next and caches', { lead: 'Auto mode silmeye izin vermedi; projenin kendi temizlik komutunu kullanıyorum.' })
+            tool('Bash', { command: s.blocked.command }, 'Permission to use Bash with command ' + s.blocked.command + ' has been denied by auto mode.', { isError: true, lead: L('Eski derleme önbelleğini temizliyorum.', 'Clearing the old build cache.'), extra: { toolDenialKind: 'automode-blocked' } })
+            bash(s.blocked.instead, 'Cleaned .next and caches', { lead: L('Auto mode silmeye izin vermedi; projenin kendi temizlik komutunu kullanıyorum.', "Auto mode blocked the delete; using the project's own clean script instead.") })
           }
           s.edits.forEach((e, i) => {
-            edit(e, i === 0 ? `Düzeltmeyi ${path.basename(e.file)} içinde yapıyorum.` : undefined)
+            edit(e, i === 0 ? L(`Düzeltmeyi ${path.basename(e.file)} içinde yapıyorum.`, `Making the fix in ${path.basename(e.file)}.`) : undefined)
             if (s.todos && i === 0) todo(s.todos, Math.min(s.todos.length - 1, 2))
             // Changes get checked as they go; large ones after every step.
             if (s.bigContext || r.chance(0.4)) bash(LINT[p.name]?.command ?? s.test.command, LINT[p.name]?.pass ?? s.test.pass)
             maybeCompact()
           })
-          bash(s.test.command, s.test.pass, { lead: 'Testleri yeniden çalıştırıyorum.' })
+          bash(s.test.command, s.test.pass, { lead: L('Testleri yeniden çalıştırıyorum.', 'Running the tests again.') })
           // A story whose work goes on elsewhere leaves its last task open.
-          if (s.todos) todo(s.todos, s.summary.includes('ayrı bir PR') ? s.todos.length - 1 : s.todos.length)
+          if (s.todos) todo(s.todos, s.leavesTaskOpen ? s.todos.length - 1 : s.todos.length)
           say(s.summary, r.int(350, 900))
         },
       })
@@ -337,7 +351,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
           run: () => {
             read(f.edit.file)
             for (const x of related([f.edit.file], r.int(1, 2))) read(x)
-            edit(f.edit, 'Değişikliği yapıyorum.')
+            edit(f.edit, L('Değişikliği yapıyorum.', 'Making the change.'))
             if (r.chance(0.5)) bash(LINT[p.name]?.command ?? s.test.command, LINT[p.name]?.pass ?? s.test.pass)
             bash(s.test.command, s.test.pass)
             say(f.reply)
@@ -348,37 +362,43 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
       const files = [...new Set([...s.edits, ...(s.followUps ?? []).map((f) => f.edit)].map((e) => e.file))]
       const extras: { prompt: string; run: Step }[] = [
         {
-          prompt: 'Ne değişti, kısaca özetle',
+          prompt: L('Ne değişti, kısaca özetle', 'Summarize briefly what changed'),
           run: () => {
             bash('git diff --stat', `${files.map((f) => ` ${f} | ${r.int(3, 40)} ${'+'.repeat(r.int(2, 9))}${'-'.repeat(r.int(0, 4))}`).join('\n')}\n ${files.length} files changed`)
-            say(`${files.length} dosya değişti: ${files.map((f) => path.basename(f)).join(', ')}. ${s.summary.split('. ')[0]}.`)
+            const names = files.map((f) => path.basename(f)).join(', ')
+            const gist = s.summary.split('. ')[0]
+            say(L(`${files.length} dosya değişti: ${names}. ${gist}.`, `${files.length} ${files.length === 1 ? 'file' : 'files'} changed: ${names}. ${gist}.`))
           },
         },
         {
-          prompt: 'Bunun başka bir yere yan etkisi olabilir mi?',
+          prompt: L('Bunun başka bir yere yan etkisi olabilir mi?', 'Could this have side effects anywhere else?'),
           run: () => {
             const target = path.basename(files[0] ?? 'index', path.extname(files[0] ?? ''))
-            tool('Grep', { pattern: target, path: cwd }, `Found ${r.int(2, 6)} files`, { lead: `${target} kullanan yerleri arıyorum.` })
+            tool('Grep', { pattern: target, path: cwd }, `Found ${r.int(2, 6)} files`, { lead: L(`${target} kullanan yerleri arıyorum.`, `Searching for places that use ${target}.`) })
             for (const f of related(files, r.int(1, 3))) read(f)
-            say(`${target} dışarıdan ${r.int(2, 5)} yerde kullanılıyor; hepsine baktım, değişiklik onların davranışını etkilemiyor. Mevcut testler bu yolları da kapsıyor.`)
+            const uses = r.int(2, 5)
+            say(L(
+              `${target} dışarıdan ${uses} yerde kullanılıyor; hepsine baktım, değişiklik onların davranışını etkilemiyor. Mevcut testler bu yolları da kapsıyor.`,
+              `${target} is used in ${uses} other places; I checked each one and the change doesn't affect their behavior. The existing tests cover those paths too.`,
+            ))
           },
         },
         {
-          prompt: 'Bütün test paketini bir kez çalıştır',
+          prompt: L('Bütün test paketini bir kez çalıştır', 'Run the full test suite once'),
           run: () => {
             bash(LINT[p.name]?.command ?? 'git status', LINT[p.name]?.pass ?? '')
             bash(s.test.command.split(' -- ')[0] ?? s.test.command, s.test.pass, { took: r.int(20, 90) * 1000 })
-            say('Bütün paket temiz: testler ve lint geçiyor.')
+            say(L('Bütün paket temiz: testler ve lint geçiyor.', 'The full suite is clean: tests and lint pass.'))
           },
         },
       ]
       for (const x of extras.sort(() => r.next() - 0.5).slice(0, r.int(2, 3))) turns.push(x)
       if (r.chance(0.55)) {
-        turns.push({ prompt: ROUTINE_TESTS, run: () => { bash(s.test.command, s.test.pass); bash(LINT[p.name]?.command ?? 'git status', LINT[p.name]?.pass ?? ''); say('Hepsi yeşil: testler ve lint temiz, düzeltilecek bir şey çıkmadı.') } })
+        turns.push({ prompt: L(ROUTINE_TESTS, ROUTINE_TESTS_EN), run: () => { bash(s.test.command, s.test.pass); bash(LINT[p.name]?.command ?? 'git status', LINT[p.name]?.pass ?? ''); say(L('Hepsi yeşil: testler ve lint temiz, düzeltilecek bir şey çıkmadı.', 'All green: tests and lint are clean, nothing to fix.')) } })
       }
       if (s.pr) {
         turns.push({
-          prompt: ROUTINE_PR,
+          prompt: L(ROUTINE_PR, ROUTINE_PR_EN),
           run: () => {
             const files = [...new Set([...s.edits, ...(s.followUps ?? []).map((f) => f.edit)].map((e) => e.file))]
             bash('git status --short', files.map((f) => ` M ${f}`).join('\n'))
@@ -391,10 +411,18 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
             records.push({ type: 'pr-link', sessionId, prNumber, prUrl: url, prRepository: p.repo, timestamp: new Date(t).toISOString() })
             // Merging is the person's call.
             if (r.chance(0.35)) {
-              tool('Bash', { command: `gh pr merge ${prNumber} --squash --auto` }, "The user doesn't want to proceed with this tool use. The tool use was rejected. The user said: merge'ü ben yaparım", { isError: true, lead: 'CI geçince otomatik birleşsin diye auto-merge açıyorum.', extra: { toolDenialKind: 'user-rejected' } })
-              say(`Tamam, birleştirmeyi sana bırakıyorum. PR #${prNumber} açık; açıklamada değişiklik özeti ve test planı var.`)
+              tool('Bash', { command: `gh pr merge ${prNumber} --squash --auto` }, `The user doesn't want to proceed with this tool use. The tool use was rejected. The user said: ${L("merge'ü ben yaparım", "I'll do the merge myself")}`, {
+                isError: true, lead: L('CI geçince otomatik birleşsin diye auto-merge açıyorum.', 'Turning on auto-merge so it lands once CI passes.'), extra: { toolDenialKind: 'user-rejected' },
+              })
+              say(L(
+                `Tamam, birleştirmeyi sana bırakıyorum. PR #${prNumber} açık; açıklamada değişiklik özeti ve test planı var.`,
+                `OK, I'll leave the merge to you. PR #${prNumber} is open; the description has a summary of the change and a test plan.`,
+              ))
             } else {
-              say(`PR #${prNumber} açıldı: ${url}\nAçıklamada ne değiştiğini, nedenini ve nasıl test edildiğini yazdım.`)
+              say(L(
+                `PR #${prNumber} açıldı: ${url}\nAçıklamada ne değiştiğini, nedenini ve nasıl test edildiğini yazdım.`,
+                `Opened PR #${prNumber}: ${url}\nThe description covers what changed, why, and how it was tested.`,
+              ))
             }
           },
         })
@@ -432,7 +460,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
     }
 
     if (msgs === 0) return
-    const title = w.review && story ? `${story.title}: review düzeltmeleri` : story?.title ?? w.question?.title ?? 'Soru'
+    const title = w.review && story ? L(`${story.title}: review düzeltmeleri`, `${story.title}: review fixes`) : story?.title ?? w.question?.title ?? L('Soru', 'Question')
     records.push({ type: 'ai-title', sessionId, aiTitle: title })
     // Claude Code's own counter runs a little ahead of the transcript: calls it never wrote down.
     records.push({
@@ -468,7 +496,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
   }
 
   // ---- what lives around the transcripts ----------------------------------------------------------
-  write(path.join(claude, 'CLAUDE.md'), [
+  write(path.join(claude, 'CLAUDE.md'), L([
     '# Genel kurallar',
     '',
     '- Türkçe yanıt ver; kod, komut ve teknik terimler özgün haliyle kalsın.',
@@ -476,18 +504,47 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
     '- Commit mesajları kısa ve emir kipinde olsun.',
     '- Gizli anahtarları asla dosyaya ya da loglara yazma.',
     '',
-  ].join('\n'))
-  write(path.join(root('carsi-web'), 'CLAUDE.md'), plain(CLAUDE_MD_WEB))
-  write(path.join(root('carsi-payments'), 'CLAUDE.md'), '# carsi-payments\n\n- Go 1.24, standart kütüphane öncelikli.\n- Para tutarları int64 kuruş.\n- Her migration geri alınabilir olmalı; index’ler CONCURRENTLY oluşturulur.\n- Testler: `go test ./...`, yarış denetimi için `go test -race ./internal/...`.\n'.replaceAll('’', "'"))
+  ], [
+    '# General rules',
+    '',
+    '- Be concise; keep code, commands and technical terms exactly as they are.',
+    '- Before fixing a bug, write the test that catches it and watch it fail.',
+    '- Keep commit messages short and in the imperative.',
+    '- Never write secrets to files or logs.',
+    '',
+  ]).join('\n'))
+  write(path.join(root('carsi-web'), 'CLAUDE.md'), plain(L(CLAUDE_MD_WEB, CLAUDE_MD_WEB_EN)))
+  write(path.join(root('carsi-payments'), 'CLAUDE.md'), L(
+    "# carsi-payments\n\n- Go 1.24, standart kütüphane öncelikli.\n- Para tutarları int64 kuruş.\n- Her migration geri alınabilir olmalı; index'ler CONCURRENTLY oluşturulur.\n- Testler: `go test ./...`, yarış denetimi için `go test -race ./internal/...`.\n",
+    '# carsi-payments\n\n- Go 1.24, standard library first.\n- Money amounts are int64 kuruş.\n- Every migration must be reversible; indexes are created CONCURRENTLY.\n- Tests: `go test ./...`, and `go test -race ./internal/...` for the race detector.\n',
+  ))
 
   const memDir = path.join(projectsDir, slugOf(root('carsi-web')), 'memory')
-  write(path.join(memDir, 'MEMORY.md'), '- [Para birimi](para-birimi.md) — tutarlar kuruş cinsinden\n- [Test komutu](test-komutu.md) — testler Vitest ile\n- [Arayüz tercihi](arayuz-tercihi.md) — sade, az renk\n')
-  write(path.join(memDir, 'para-birimi.md'), '---\nname: para-birimi\ndescription: Tutarlar her yerde kuruş cinsinden tam sayı\nmetadata:\n  type: project\n---\n\nFiyatlar kuruş cinsinden tutulur; ekrana formatPrice ile yazılır.\n')
-  write(path.join(memDir, 'test-komutu.md'), '---\nname: test-komutu\ndescription: Testler npm run test ile çalışır; Jest değil Vitest\nmetadata:\n  type: feedback\n---\n\nnpx jest komutu yok; npm run test Vitest çalıştırır.\n')
-  write(path.join(memDir, 'arayuz-tercihi.md'), '---\nname: arayuz-tercihi\ndescription: Arayüz sade, en fazla iki vurgu rengi\nmetadata:\n  type: user\n---\n\nKalabalık arayüz istemiyor; yeni bileşenlerde mevcut token’ları kullan.\n'.replaceAll('’', "'"))
+  const memory = L(
+    [
+      { file: 'para-birimi', title: 'Para birimi', hook: 'tutarlar kuruş cinsinden', type: 'project', description: 'Tutarlar her yerde kuruş cinsinden tam sayı', body: 'Fiyatlar kuruş cinsinden tutulur; ekrana formatPrice ile yazılır.' },
+      { file: 'test-komutu', title: 'Test komutu', hook: 'testler Vitest ile', type: 'feedback', description: 'Testler npm run test ile çalışır; Jest değil Vitest', body: 'npx jest komutu yok; npm run test Vitest çalıştırır.' },
+      { file: 'arayuz-tercihi', title: 'Arayüz tercihi', hook: 'sade, az renk', type: 'user', description: 'Arayüz sade, en fazla iki vurgu rengi', body: "Kalabalık arayüz istemiyor; yeni bileşenlerde mevcut token'ları kullan." },
+    ],
+    [
+      { file: 'currency', title: 'Currency', hook: 'amounts are in kuruş', type: 'project', description: 'Amounts are whole numbers of kuruş everywhere', body: 'Prices are stored in kuruş and shown on screen with formatPrice.' },
+      { file: 'test-command', title: 'Test command', hook: 'tests run on Vitest', type: 'feedback', description: 'Tests run with npm run test; Vitest, not Jest', body: 'There is no npx jest; npm run test runs Vitest.' },
+      { file: 'ui-preference', title: 'UI preference', hook: 'plain, few colors', type: 'user', description: 'Plain interface, at most two accent colors', body: "Doesn't want a busy interface; use the existing tokens in new components." },
+    ],
+  )
+  write(path.join(memDir, 'MEMORY.md'), memory.map((m) => `- [${m.title}](${m.file}.md) — ${m.hook}\n`).join(''))
+  for (const m of memory) {
+    write(path.join(memDir, `${m.file}.md`), `---\nname: ${m.file}\ndescription: ${m.description}\nmetadata:\n  type: ${m.type}\n---\n\n${m.body}\n`)
+  }
 
-  write(path.join(claude, 'skills', 'release-notes', 'SKILL.md'), '---\nname: release-notes\ndescription: Son sürümden bu yana birleşen PR’lardan müşteriye dönük sürüm notu yazar\n---\n\nPR başlıklarını grupla, iç düzenlemeleri dışarıda bırak.\n'.replaceAll('’', "'"))
-  write(path.join(claude, 'skills', 'sql-review', 'SKILL.md'), '---\nname: sql-review\ndescription: Migration ve sorguları index, kilit ve geri alınabilirlik açısından inceler\n---\n\nHer migration için geri alma adımını ve kilit süresini kontrol et.\n')
+  write(path.join(claude, 'skills', 'release-notes', 'SKILL.md'), L(
+    "---\nname: release-notes\ndescription: Son sürümden bu yana birleşen PR'lardan müşteriye dönük sürüm notu yazar\n---\n\nPR başlıklarını grupla, iç düzenlemeleri dışarıda bırak.\n",
+    '---\nname: release-notes\ndescription: Writes customer-facing release notes from the PRs merged since the last release\n---\n\nGroup PR titles and leave internal changes out.\n',
+  ))
+  write(path.join(claude, 'skills', 'sql-review', 'SKILL.md'), L(
+    '---\nname: sql-review\ndescription: Migration ve sorguları index, kilit ve geri alınabilirlik açısından inceler\n---\n\nHer migration için geri alma adımını ve kilit süresini kontrol et.\n',
+    '---\nname: sql-review\ndescription: Reviews migrations and queries for indexes, locks and reversibility\n---\n\nFor every migration, check the rollback step and how long it holds locks.\n',
+  ))
   write(path.join(claude, 'plugins', 'installed_plugins.json'), JSON.stringify({
     version: 2,
     plugins: {
@@ -499,7 +556,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
     model: 'opus',
     permissions: { allow: ['Bash(npm run test:*)', 'Bash(go test:*)', 'Bash(git status:*)', 'Bash(git diff:*)', 'Read', 'Grep', 'Glob'], deny: ['Bash(rm -rf:*)'], ask: ['Bash(git push:*)'] },
     hooks: { PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'npx prettier --write "$CLAUDE_FILE_PATHS"' }] }] },
-    env: { CARSI_API_URL: 'https://api.example.com', DEMO_TOKEN: 'gösterilmez' },
+    env: { CARSI_API_URL: 'https://api.example.com', DEMO_TOKEN: L('gösterilmez', 'never shown') },
     enabledPlugins: { 'frontend-design@claude-plugins-official': true, 'commit-commands@claude-plugins-official': false },
   }, null, 2))
   write(path.join(root('carsi-web'), '.mcp.json'), JSON.stringify({ mcpServers: { storybook: { command: 'npx', args: ['storybook-mcp'] } } }, null, 2))
@@ -514,7 +571,7 @@ export function generateDemoHome({ home, now, seed = 20261021 }: DemoOptions): v
     },
     mcpServers: {
       linear: { type: 'http', url: 'https://mcp.linear.app/mcp' },
-      github: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], env: { GITHUB_TOKEN: 'gösterilmez' } },
+      github: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], env: { GITHUB_TOKEN: L('gösterilmez', 'never shown') } },
       puppeteer: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-puppeteer'] },
     },
     skillUsage: { 'release-notes': { usageCount: 3 }, 'sql-review': { usageCount: 2 } },

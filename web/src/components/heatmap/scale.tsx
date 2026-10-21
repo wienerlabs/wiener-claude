@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { Metric } from '../../../../shared/types.ts'
 import { fmtMetricShort } from '../../lib/format.ts'
+import { tx } from '../../lib/i18n.ts'
 
 export const HEAT = ['var(--heat-0)', 'var(--heat-1)', 'var(--heat-2)', 'var(--heat-3)', 'var(--heat-4)'] as const
 
@@ -30,7 +31,7 @@ export function Legend({ metric, t, max }: { metric: Metric; t: [number, number,
   const f = (v: number) => fmtMetricShort(metric, v)
   const ranges = max <= 0 ? [] : [`${f(0)}`, `≤ ${f(t[0])}`, `≤ ${f(t[1])}`, `≤ ${f(t[2])}`, `≤ ${f(max)}`]
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3 font-mono num" aria-label="Renk ölçeği">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3 font-mono num" aria-label={tx('Renk ölçeği', 'Color scale')}>
       {ranges.map((label, i) => (
         <span key={label + i} className="inline-flex items-center gap-1.5">
           <span className="inline-block size-2.5 rounded-[3px]" style={{ background: HEAT[i] }} aria-hidden />

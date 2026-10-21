@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { HeatmapResponse } from '../../../../shared/types.ts'
-import { MONTHS_SHORT, dayKey, fmtDayLong, fmtMetric, parseDay } from '../../lib/format.ts'
+import { dayKey, fmtDayLong, fmtMetric, monthsShort, parseDay, weekdaysShort } from '../../lib/format.ts'
+import { tx } from '../../lib/i18n.ts'
 import { HEAT, Legend, levelOf, quartiles, useTooltip } from './scale.tsx'
-
-const ROW_LABELS = ['Pzt', '', 'Çar', '', 'Cum', '', '']
 
 interface Props {
   data: HeatmapResponse
@@ -14,7 +13,7 @@ interface Props {
 }
 
 /** A year of days: one column per week (Monday first), one cell per day. */
-export function Calendar({ data, selected = null, onSelect, hint = 'Bir güne tıkla, o günün oturumları açılsın.' }: Props) {
+export function Calendar({ data, selected = null, onSelect, hint = tx('Bir güne tıkla, o günün oturumları açılsın.', 'Click a day to see its sessions.') }: Props) {
   const { box, show, hide, node } = useTooltip()
   const scroller = useRef<HTMLDivElement>(null)
 
@@ -43,6 +42,8 @@ export function Calendar({ data, selected = null, onSelect, hint = 'Bir güne t�
   }, [weeks.length])
 
   const cols = `1.75rem repeat(${weeks.length}, minmax(11px, 1fr))`
+  // Monday, Wednesday and Friday are labeled.
+  const rowLabels = weekdaysShort().map((d, i) => (i % 2 === 0 && i < 6 ? d : ''))
   return (
     <div ref={box} className="relative" onMouseLeave={hide}>
       <div ref={scroller} className="overflow-x-auto pb-1" onScroll={hide}>
@@ -53,11 +54,11 @@ export function Calendar({ data, selected = null, onSelect, hint = 'Bir güne t�
               const first = w.find((d) => d.date.getDate() === 1)
               return (
                 <span key={`m${i}`} className="h-4 overflow-visible whitespace-nowrap text-[11px] leading-4 text-ink-3">
-                  {first ? MONTHS_SHORT[first.date.getMonth()] : ''}
+                  {first ? monthsShort()[first.date.getMonth()] : ''}
                 </span>
               )
             })}
-            {ROW_LABELS.map((label, row) => (
+            {rowLabels.map((label, row) => (
               <Row key={row} label={label}>
                 {weeks.map((w) => {
                   const d = w[row]

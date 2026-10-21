@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { HeatmapResponse } from '../../../../shared/types.ts'
-import { MONTHS_SHORT, dayKey, fmtDayLong, fmtDayShort, fmtMetric, fmtMetricShort, parseDay } from '../../lib/format.ts'
+import { dayKey, fmtDayLong, fmtDayMonthShort, fmtDayShort, fmtMetric, fmtMetricShort, monthsShort, parseDay } from '../../lib/format.ts'
+import { tx } from '../../lib/i18n.ts'
 import { HEAT, Legend, levelOf, quartiles, useTooltip } from './scale.tsx'
 
 interface Props {
@@ -25,11 +26,11 @@ export function ProjectDay({ data, selected, onSelect }: Props) {
   }, [data])
   const columnLabel = (day: string, i: number) => {
     const d = parseDay(day)
-    if (weekly) return d.getDate() <= 7 ? MONTHS_SHORT[d.getMonth()] : ''
-    return d.getDate() === 1 || i === 0 ? `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}` : d.getDay() === 1 ? String(d.getDate()) : ''
+    if (weekly) return d.getDate() <= 7 ? monthsShort()[d.getMonth()] : ''
+    return d.getDate() === 1 || i === 0 ? fmtDayMonthShort(d) : d.getDay() === 1 ? String(d.getDate()) : ''
   }
 
-  if (data.projects.length === 0) return <p className="py-10 text-center text-ink-2">Bu aralıkta proje etkinliği yok.</p>
+  if (data.projects.length === 0) return <p className="py-10 text-center text-ink-2">{tx('Bu aralıkta proje etkinliği yok.', 'No project activity in this range.')}</p>
 
   const cols = `minmax(7rem, 11rem) repeat(${days.length}, minmax(${weekly ? 14 : 9}px, 1fr)) 4.5rem`
   return (
@@ -51,7 +52,7 @@ export function ProjectDay({ data, selected, onSelect }: Props) {
                 </span>
                 {days.map((day) => {
                   const v = values.get(`${p.key}|${day}`) ?? 0
-                  const tip = { value: fmtMetric(data.metric, v), label: `${p.name} · ${weekly ? `${fmtDayShort(day)} haftası` : fmtDayLong(day)}` }
+                  const tip = { value: fmtMetric(data.metric, v), label: `${p.name} · ${weekly ? tx(`${fmtDayShort(day)} haftası`, `Week of ${fmtDayShort(day)}`) : fmtDayLong(day)}` }
                   // A week is not a day: weekly cells show their tooltip but open no day ledger.
                   if (weekly) {
                     return (
@@ -92,8 +93,11 @@ export function ProjectDay({ data, selected, onSelect }: Props) {
       {node}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[12px] text-ink-3">
-          En çok etkinlik olan {Math.min(10, data.projects.length)} proje.{' '}
-          {weekly ? 'Her sütun bir hafta.' : 'Bir hücreye tıkla, o gün açılsın.'}
+          {tx(
+            `En çok etkinlik olan ${Math.min(10, data.projects.length)} proje.`,
+            Math.min(10, data.projects.length) === 1 ? 'The most active project.' : `The ${Math.min(10, data.projects.length)} most active projects.`,
+          )}{' '}
+          {weekly ? tx('Her sütun bir hafta.', 'Each column is a week.') : tx('Bir hücreye tıkla, o gün açılsın.', 'Click a cell to open that day.')}
         </span>
         <Legend metric={data.metric} t={t} max={data.max} />
       </div>

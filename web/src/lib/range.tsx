@@ -1,15 +1,26 @@
 import type { RangeKey } from '../../../shared/types.ts'
 import { Segmented } from '../components/ui.tsx'
+import { tx } from './i18n.ts'
 import { navigate, useLocation } from './router.ts'
 
-export const RANGES: { value: RangeKey; label: string; slug: string; span: string }[] = [
-  { value: 'week', label: 'Bu hafta', slug: 'hafta', span: 'Bu hafta' },
-  { value: '30d', label: 'Son 30 gün', slug: '30-gun', span: 'Son 30 günde' },
-  { value: 'all', label: 'Tüm zamanlar', slug: 'tum', span: 'Tüm zamanlarda' },
+// Slugs stay Turkish in both languages, so shared links open on the same range.
+const RANGES: { value: RangeKey; slug: string }[] = [
+  { value: 'week', slug: 'hafta' },
+  { value: '30d', slug: '30-gun' },
+  { value: 'all', slug: 'tum' },
 ]
 
-/** "Bu hafta", "Son 30 günde", "Tüm zamanlarda": the range as the start of a sentence. */
-export const rangeSpan = (key: RangeKey) => RANGES.find((r) => r.value === key)?.span ?? ''
+export function rangeLabel(key: RangeKey): string {
+  return key === 'week' ? tx('Bu hafta', 'This week') : key === '30d' ? tx('Son 30 gün', 'Last 30 days') : tx('Tüm zamanlar', 'All time')
+}
+
+/**
+ * The range as the start of a sentence: "Bu hafta", "Son 30 günde", "Tüm zamanlarda"; in English
+ * "This week", "In the last 30 days", "Across all time".
+ */
+export function rangeSpan(key: RangeKey): string {
+  return key === 'week' ? tx('Bu hafta', 'This week') : key === '30d' ? tx('Son 30 günde', 'In the last 30 days') : tx('Tüm zamanlarda', 'Across all time')
+}
 
 /** The selected range lives in ?donem=, so reloads, back/forward and shared links keep it. */
 export function useRange(fallback: RangeKey): [RangeKey, (key: RangeKey) => void] {
@@ -32,5 +43,5 @@ export function rangeHref(path: string, key: RangeKey, fallback: RangeKey = '30d
 }
 
 export function RangePicker({ value, onChange }: { value: RangeKey; onChange: (key: RangeKey) => void }) {
-  return <Segmented label="Dönem" value={value} onChange={onChange} options={RANGES.map((r) => ({ value: r.value, label: r.label }))} />
+  return <Segmented label={tx('Dönem', 'Period')} value={value} onChange={onChange} options={RANGES.map((r) => ({ value: r.value, label: rangeLabel(r.value) }))} />
 }

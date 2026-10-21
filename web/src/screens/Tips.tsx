@@ -4,6 +4,7 @@ import type { Tip, TipsReport } from '../../../shared/types.ts'
 import { savingText } from '../components/TipLinks.tsx'
 import { Card, ErrorNote, Skeleton, cx } from '../components/ui.tsx'
 import { useApi } from '../lib/api.ts'
+import { tx } from '../lib/i18n.ts'
 import { RangePicker, rangeSpan, useRange } from '../lib/range.tsx'
 import { onLinkClick } from '../lib/router.ts'
 
@@ -22,9 +23,12 @@ export function Tips() {
     <div className="mx-auto max-w-[920px] space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">İpuçları</h1>
+          <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em]">{tx('İpuçları', 'Tips')}</h1>
           <p className="max-w-[60ch] text-[14px] text-ink-2">
-            Transcript'lerinden çıkan öneriler, dayandıkları oturumlarla birlikte. Hepsi bu bilgisayarda, kurallarla hesaplanır; hiçbir şey dışarı gönderilmez.
+            {tx(
+              "Transcript'lerinden çıkan öneriler, dayandıkları oturumlarla birlikte. Hepsi bu bilgisayarda, kurallarla hesaplanır; hiçbir şey dışarı gönderilmez.",
+              'Suggestions drawn from your transcripts, along with the sessions behind them. Everything is rule-based and computed on this computer; nothing is sent anywhere.',
+            )}
           </p>
         </div>
         <RangePicker value={range} onChange={setRange} />
@@ -41,14 +45,22 @@ export function Tips() {
         <div className={cx('space-y-5 transition-opacity', stale && 'opacity-60')} aria-busy={stale}>
           {data.tips.length === 0 ? (
             <Card>
-              <p className="px-5 py-5 text-ink-2">{rangeSpan(range)} öne çıkan bir ipucu yok. Kullanım arttıkça burada öneriler belirir.</p>
+              <p className="px-5 py-5 text-ink-2">
+                {tx(
+                  `${rangeSpan(range)} öne çıkan bir ipucu yok. Kullanım arttıkça burada öneriler belirir.`,
+                  `${rangeSpan(range)}, no tips stand out. Suggestions will show up here as you use Claude Code more.`,
+                )}
+              </p>
             </Card>
           ) : (
             data.tips.map((t) => <TipCard key={t.kind} tip={t} />)
           )}
           {data.tips.some((t) => t.saving !== null) ? (
             <p className="text-[12px] text-ink-3">
-              Tahminler liste fiyatıyla hesaplanır ve birbiriyle örtüşebilir (örneğin context şişmesi ile cache yeniden yazımı aynı çağrılara dokunur), bu yüzden toplanmamalı.
+              {tx(
+                'Tahminler liste fiyatıyla hesaplanır ve birbiriyle örtüşebilir (örneğin context şişmesi ile cache yeniden yazımı aynı çağrılara dokunur), bu yüzden toplanmamalı.',
+                "Estimates use list prices and can overlap (context bloat and cache rewrites, for example, affect the same calls), so don't add them up.",
+              )}
             </p>
           ) : null}
         </div>
@@ -69,11 +81,11 @@ function TipCard({ tip }: { tip: Tip }) {
         <p className="text-[14px]">{tip.finding}</p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <h3 className="text-[12px] text-ink-3">Neden önemli</h3>
+            <h3 className="text-[12px] text-ink-3">{tx('Neden önemli', 'Why it matters')}</h3>
             <p className="text-[13px] text-ink-2">{tip.why}</p>
           </div>
           <div>
-            <h3 className="text-[12px] text-ink-3">Ne yapabilirsin</h3>
+            <h3 className="text-[12px] text-ink-3">{tx('Ne yapabilirsin', 'What you can do')}</h3>
             <p className="text-[13px] text-ink-2">{tip.action}</p>
           </div>
         </div>
@@ -81,7 +93,7 @@ function TipCard({ tip }: { tip: Tip }) {
 
       {tip.examples.length ? (
         <div className="border-t border-line px-5 py-3">
-          <h3 className="pb-1 text-[12px] text-ink-3">Dayandığı örnekler</h3>
+          <h3 className="pb-1 text-[12px] text-ink-3">{tx('Dayandığı örnekler', 'Supporting examples')}</h3>
           <ul>
             {tip.examples.map((e, i) => (
               <li key={`${e.label}-${i}`} className="flex flex-col py-1 text-[13px] sm:flex-row sm:items-baseline sm:gap-3">
@@ -128,7 +140,7 @@ function Snippet({ label, code }: { label: string; code: string }) {
         <h3 className="truncate font-mono text-[12px] text-ink-3">{label}</h3>
         <button type="button" onClick={copy} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-ink-2 hover:bg-raised hover:text-ink">
           {copied ? <Check className="size-3.5 text-good" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-          {copied ? 'Kopyalandı' : 'Kopyala'}
+          {copied ? tx('Kopyalandı', 'Copied') : tx('Kopyala', 'Copy')}
         </button>
       </div>
       <pre className="overflow-x-auto rounded-lg bg-raised px-3 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-ink">{code}</pre>

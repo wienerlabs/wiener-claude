@@ -46,6 +46,8 @@ export interface Story {
   edits: Edit[]
   test: Test
   summary: string
+  /** The story's work goes on in another PR: its last task stays open. */
+  leavesTaskOpen?: boolean
   followUps?: FollowUp[]
   pr?: boolean
   /** Review comments on the PR, answered in a later session. */
@@ -338,6 +340,7 @@ export const STORIES: ProjectStories[] = [
         ],
         test: { command: 'go test ./internal/refund/...', fail: goFail('refund', 'TestPartialRefund_ExceedsPayment', 'service_test.go', 112, 'err = <nil>, want ErrRefundExceedsPayment'), pass: goPass('refund') },
         summary: 'Kısmi iade hazır: bir ödemeye istenen sayıda kısmi iade yapılabiliyor, toplam ödemeyi aşarsa 422 dönüyor. Ödeme durumu kısmi ve tam iade arasında doğru geçiyor. Dokümanı ayrı bir PR olarak carsi-docs’ta güncellemek gerekecek.',
+        leavesTaskOpen: true,
         pr: true,
         review: { comment: '@mert: 422 yanıtında kalan iade edilebilir tutarı da dönelim, mobil uygulama gösterecek.', edit: { file: 'internal/http/handlers.go', old: '\t\twriteProblem(w, 422, "refund_exceeds_payment", err.Error())', new: '\t\twriteProblemWith(w, 422, "refund_exceeds_payment", err.Error(), map[string]any{"refundable": p.Amount - refunded})' }, reply: '422 yanıtı artık refundable alanında kalan tutarı kuruş cinsinden dönüyor. Dokümana da ekledim.' },
         bigContext: true,

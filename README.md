@@ -24,13 +24,14 @@ npx wiener-tools-claude
   <img alt="Genel bakış: bir yıllık etkinlik takvimi, günün özeti ve dönem tablosu" src="https://raw.githubusercontent.com/wienerlabs/wiener-claude/main/docs/images/overview-light.png" />
 </picture>
 
-Claude Code, her oturumu bilgisayarındaki `~/.claude` klasörüne yazar. Wiener Tools bu dosyaları okuyup tarayıcıda açılan bir panele dönüştürür: ne kadar çalıştığını, paranın nereye gittiğini, Claude'un hangi araçları kullandığını ve nerede takıldığını gösterir. Hesap, API anahtarı ya da bulut yok; veriler makineden çıkmaz.
+Claude Code, her oturumu bilgisayarındaki `~/.claude` klasörüne yazar. Wiener Tools for Claude Code bu dosyaları okuyup tarayıcıda açılan bir panele dönüştürür: ne kadar çalıştığını, paranın nereye gittiğini, Claude'un hangi araçları kullandığını ve nerede takıldığını gösterir. Hesap, API anahtarı ya da bulut yok; veriler makineden çıkmaz.
 
 - **Doğru sayılar.** Claude Code bir yanıtı birden fazla satıra yazar; her yanıt bir kez sayılır. Fiyatlar Claude Code'un kendi `costUSD` değerleriyle doğrulanmıştır.
 - **Kanıta dayalı öneriler.** Her ipucu dayandığı oturumları gösterir; tahmini kazancı ve gerekiyorsa kopyalanabilir bir `CLAUDE.md` satırını verir.
 - **Tamamen yerel.** Sunucu varsayılan olarak yalnızca `127.0.0.1`'de dinler, `~/.claude` içine hiçbir şey yazmaz, gizli değerleri hiç göstermez.
+- **Türkçe ve İngilizce.** Arayüz tarayıcının diliyle açılır; menüdeki TR/EN anahtarıyla istediğin an değişir. Canlı demonun da İngilizce bir veri seti var.
 
-Wiener Tools, [Wiener Labs](https://wienerlabs.xyz)'in [araç ailesinin](https://tools.wienerlabs.xyz) bir parçasıdır.
+Wiener Tools for Claude Code, [Wiener Labs](https://wienerlabs.xyz)'in araç ailesi [Wiener Tools](https://tools.wienerlabs.xyz)'a eklenen yeni bir araçtır.
 
 ## Özellikler
 
@@ -107,6 +108,7 @@ Panel tarayıcıda kendiliğinden açılır. İlk indeksleme geçmişin büyükl
 | --- | --- | --- |
 | `--port <n>` | `4747` | Dinlenecek port; doluysa bir sonraki denenir |
 | `--host <h>` | `127.0.0.1` | `0.0.0.0` paneli yerel ağa açar |
+| `--lang <dil>` | tarayıcının dili | Panelin dili: `tr` ya da `en` |
 | `--no-open` | | Tarayıcıyı açma |
 | `-v`, `--version` | | Sürümü göster |
 
@@ -115,6 +117,7 @@ Panel tarayıcıda kendiliğinden açılır. İlk indeksleme geçmişin büyükl
 | `CLAUDE_CONFIG_DIR` | Başka bir Claude profili: `CLAUDE_CONFIG_DIR=~/.claude-work npx wiener-tools-claude` |
 | `WIENER_DATA_DIR` | İndeksin ve ayarların tutulduğu klasör (varsayılan `~/.wiener-tools/claude`) |
 | `WIENER_PORT` | Varsayılan port |
+| `WIENER_LANG` | Terminal çıktısının dili (`tr` ya da `en`); verilmezse sistemin dili |
 
 Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok başına dolar):
 
@@ -125,7 +128,7 @@ Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok baş
 ## Gizlilik ve güvenlik
 
 - **Veri makineden çıkmaz.** Panel hiçbir dış adrese istek atmaz; analizlerin hepsi yerel kurallarla yapılır.
-- **Yalnızca okur.** `~/.claude` içine hiçbir şey yazılmaz. Wiener Tools kendi indeksini `~/.wiener-tools/claude/index.db`, bütçe ayarını `settings.json` dosyasında tutar; indeks silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar kalır.
+- **Yalnızca okur.** `~/.claude` içine hiçbir şey yazılmaz. Panel kendi indeksini `~/.wiener-tools/claude/index.db`, bütçe ayarını `settings.json` dosyasında tutar; indeks silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar kalır.
 - **Yerel ağa kapalı.** Sunucu varsayılan olarak `127.0.0.1`'de dinler ve `Host` başlığını denetler; DNS rebinding ile erişim engellenir. Tek yazma işlemi (bütçe) JSON gövde ister ve `Origin` başlığını denetler.
 - **Gizli değerler gösterilmez.** MCP sunucularının ortam değişkenleri, başlıkları ve argümanları, ayarlardaki ortam değişkeni değerleri ve hook argümanları hiçbir zaman gösterilmez. `~/.claude.json` dosyasından isim okunmaz. Hesap kimliği ve e-posta yalnızca birden fazla hesabı ayırmak için okunur; e-postanın yalnızca kısaltması (`ada…@gmail.com`) saklanır ve gösterilir.
 - **Dosya erişimi sınırlı.** Dosya içerikleri yalnızca sunucunun kendi listelediği memory ve `CLAUDE.md` dosyaları için verilir; istek bir yol değil, listedeki kimliği taşır.
@@ -214,9 +217,9 @@ test/      Vitest testleri ve sentetik transcript kayıtları
 
 ## English
 
-**Wiener Tools for Claude Code** is a local dashboard for your Claude Code usage. It reads the files Claude Code writes to `~/.claude` and turns them into activity heatmaps, session replays with full-text search, cost and limit tracking, tool and MCP usage, per-project trends, a shareable year-in-review card and evidence-based tips (context bloat, cache rewrites, repeated prompts, setup errors and more), each backed by the sessions it comes from.
+**Wiener Tools for Claude Code** is a local dashboard for your Claude Code usage. It reads the files Claude Code writes to `~/.claude` and turns them into activity heatmaps, session replays with full-text search, cost and limit tracking, tool and MCP usage, per-project trends, a shareable year-in-review card and evidence-based tips (context bloat, cache rewrites, repeated prompts, setup errors and more), each backed by the sessions it comes from. If you use more than one Claude account in the desktop app, a picker in the menu splits every screen by account. It is the newest addition to [Wiener Tools](https://tools.wienerlabs.xyz), the tool family from [Wiener Labs](https://wienerlabs.xyz).
 
-Everything stays on your machine: the server listens on `127.0.0.1` only, never writes to `~/.claude`, sends nothing anywhere and never shows secret values. Run it with `npx wiener-tools-claude` (Node.js 22.13+), or try the [live demo](https://claude.wienerlabs.xyz) with made-up data. The interface is in Turkish for now.
+Everything stays on your machine: the server listens on `127.0.0.1` only, never writes to `~/.claude`, sends nothing anywhere and never shows secret values. Run it with `npx wiener-tools-claude` (Node.js 22.13+), or try the [live demo](https://claude.wienerlabs.xyz/?lang=en) with made-up data. The interface is in English and Turkish: it follows your browser's language, and the TR/EN switch in the menu changes it at any time (`--lang en` opens it in English).
 
 ## Lisans
 

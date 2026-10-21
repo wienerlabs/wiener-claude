@@ -89,14 +89,14 @@ describe('languages', () => {
   it('names languages by extension and keeps docs out of the main language', () => {
     expect(languageOf('/a/b/App.tsx')).toBe('TypeScript')
     expect(languageOf('/a/Dockerfile')).toBe('Dockerfile')
-    expect(languageOf('/a/.gitignore')).toBe('Diğer')
+    expect(languageOf('/a/.gitignore')).toBe('Other')
     const shares = languageShares([
       { path: '/r/README.md', lines: 900, edits: 3 },
       { path: '/r/src/main.rs', lines: 120, edits: 4 },
       { path: '/r/src/lib.rs', lines: 30, edits: 1 },
       { path: '/r/NOTICE', lines: 5000, edits: 1 },
     ])
-    expect(shares.map((s) => s.name)).toEqual(['Markdown', 'Rust', 'Diğer'])
+    expect(shares.map((s) => s.name)).toEqual(['Markdown', 'Rust', 'Other'])
     expect(shares[1]).toMatchObject({ lines: 150, edits: 5, files: 2 })
     expect(mainLanguage(shares)).toBe('Rust')
     expect(mainLanguage(languageShares([{ path: '/r/a.json', lines: 3, edits: 1 }]))).toBeNull()

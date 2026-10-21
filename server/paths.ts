@@ -1,5 +1,6 @@
 import os from 'node:os'
 import path from 'node:path'
+import { type Lang, isLang } from '../shared/i18n.ts'
 
 export function claudeDir(): string {
   return process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')
@@ -37,4 +38,12 @@ export function desktopSessionsDir(): string | null {
  */
 export function dataDir(): string {
   return process.env.WIENER_DATA_DIR ?? path.join(os.homedir(), '.wiener-tools', 'claude')
+}
+
+/** The terminal's language: WIENER_LANG if set, else the locale variables; Turkish or English. */
+export function terminalLang(): Lang {
+  const set = process.env.WIENER_LANG
+  if (isLang(set)) return set
+  const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || ''
+  return locale.toLowerCase().startsWith('tr') ? 'tr' : 'en'
 }
