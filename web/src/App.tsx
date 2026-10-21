@@ -40,15 +40,15 @@ export function App() {
 
   useEffect(() => {
     const title = path === '/' ? null : nav().find((n) => n.match(path))?.label
-    document.title = title ? `${title} · Wiener Tools` : 'Wiener Tools'
+    document.title = title ? `${title} · Wiener Lens` : 'Wiener Lens'
   }, [path])
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
       <aside className="flex flex-wrap items-center gap-4 border-b border-line bg-bg px-4 py-3 md:sticky md:top-0 md:h-screen md:flex-col md:flex-nowrap md:items-stretch md:gap-0 md:border-r md:border-b-0 md:px-3 md:py-5">
-        <a href="/" onClick={(e) => onLinkClick(e, '/')} aria-label={tx('Wiener Tools ana sayfa', 'Wiener Tools home')} className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
+        <a href="/" onClick={(e) => onLinkClick(e, '/')} aria-label={tx('Wiener Lens ana sayfa', 'Wiener Lens home')} className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
           <Mark />
-          <span className="hidden font-display text-[17px] font-semibold tracking-[-0.02em] sm:inline">Wiener Tools</span>
+          <span className="hidden font-display text-[17px] font-semibold tracking-[-0.02em] sm:inline">Wiener Lens</span>
         </a>
         <nav aria-label={tx('Ana menü', 'Main menu')} className="flex gap-0.5 md:flex-col md:gap-1">
           {nav().map(({ to, label, icon: Icon, match }) => {

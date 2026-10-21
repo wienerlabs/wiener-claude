@@ -17,7 +17,7 @@ const LANG = terminalLang()
 const L = (tr: string, en: string) => pick(LANG, tr, en)
 
 const HELP = L(
-  `Wiener Tools for Claude Code ${VERSION}: Claude Code kullanımını yerelde gösterir.
+  `Wiener Lens ${VERSION}: Claude Code kullanımını yerelde gösterir.
 
 Kullanım: wiener-tools-claude [seçenekler]
 
@@ -30,7 +30,7 @@ Kullanım: wiener-tools-claude [seçenekler]
 
 Ortam değişkenleri: CLAUDE_CONFIG_DIR, WIENER_DATA_DIR, WIENER_PORT, WIENER_LANG
 `,
-  `Wiener Tools for Claude Code ${VERSION}: your Claude Code usage, shown locally.
+  `Wiener Lens ${VERSION}: your Claude Code usage, shown locally.
 
 Usage: wiener-tools-claude [options]
 
@@ -133,8 +133,8 @@ async function main(): Promise<void> {
 
   const url = `http://${lan ? 'localhost' : opts.host === '127.0.0.1' ? 'localhost' : opts.host}:${port}`
   process.stdout.write(L(
-    `\n  Wiener Tools for Claude Code  ${url}\n  Okunan klasör: ${projectsDir()}\n  Kendi verisi:  ${dataDir()}\n`,
-    `\n  Wiener Tools for Claude Code  ${url}\n  Reading:   ${projectsDir()}\n  Own data:  ${dataDir()}\n`,
+    `\n  Wiener Lens  ${url}\n  Okunan klasör: ${projectsDir()}\n  Kendi verisi:  ${dataDir()}\n`,
+    `\n  Wiener Lens  ${url}\n  Reading:   ${projectsDir()}\n  Own data:  ${dataDir()}\n`,
   ))
   if (lan) process.stdout.write(L('  Uyarı: panel yerel ağdaki herkese açık.\n', '  Warning: the panel is open to everyone on your local network.\n'))
   process.stdout.write('\n')

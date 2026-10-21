@@ -54,7 +54,7 @@ export function YearCard({ data, options, ref }: { data: YearReport; options: Ye
         <path fillRule="evenodd" d={MARK_PATH} />
       </g>
       <text x={PAD + 50} y={80} fontFamily={DISPLAY} fontSize={22} fontWeight={600} fill="var(--ink)" letterSpacing={-0.4}>
-        Wiener Tools
+        Wiener Lens
       </text>
       <text x={CARD_W - PAD} y={80} textAnchor="end" fontFamily={SANS} fontSize={18} fill="var(--ink-3)">
         {span}
