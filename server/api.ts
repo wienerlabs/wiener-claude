@@ -12,6 +12,7 @@ import type { Indexer } from './indexer.ts'
 import { costReport, readAccount } from './costs.ts'
 import { envReport, fileContent } from './env.ts'
 import { liveSessions } from './live.ts'
+import { desktopSessionsDir } from './paths.ts'
 import type { Pricing } from './pricing.ts'
 import { projectDetail, projectList } from './projects.ts'
 import { parseRange, rangeBounds } from './range.ts'
@@ -194,7 +195,7 @@ export function createApp(ctx: AppContext): Hono {
 
   app.get('/api/costs', (c) => {
     const { db: scoped, account } = scopeOf(c)
-    const info = account ? accountInfo(db, account) : readAccount()
+    const info = account ? accountInfo(db, account, desktopSessionsDir()) : readAccount()
     return c.json(costReport(scoped, ctx.pricing, info, Date.now(), readSettings().monthlyBudget, parseRange(c.req.query('range'), '30d')))
   })
 
