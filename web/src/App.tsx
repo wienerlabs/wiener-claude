@@ -1,4 +1,4 @@
-import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Moon, Monitor, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
+import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Monitor, MonitorDown, Moon, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Account, IndexStatus } from '../../shared/types.ts'
 import { DemoBanner } from './components/DemoBanner.tsx'
@@ -9,6 +9,7 @@ import { getJson, useAccount, useApi } from './lib/api.ts'
 import { DEMO } from './lib/demo.ts'
 import { fmtRelative } from './lib/format.ts'
 import { setLang, tx, useLang } from './lib/i18n.ts'
+import { installApp, useInstallPrompt } from './lib/install.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
 import { Costs } from './screens/Costs.tsx'
 import { Environment } from './screens/Environment.tsx'
@@ -72,6 +73,7 @@ export function App() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2 md:mt-auto md:ml-0 md:flex-col md:items-stretch md:gap-3 md:px-2">
+          <InstallButton />
           <AccountPicker />
           <IndexBadge />
           <div className="hidden items-center gap-2 sm:flex md:justify-between">
@@ -110,6 +112,22 @@ export function App() {
         </footer>
       </main>
     </div>
+  )
+}
+
+function InstallButton() {
+  const prompt = useInstallPrompt()
+  if (!prompt) return null
+  return (
+    <button
+      type="button"
+      onClick={installApp}
+      title={tx('Paneli kendi penceresi ve simgesiyle aç', 'Open the dashboard in its own window, with its own icon')}
+      className="hidden items-center gap-1.5 rounded-md text-left text-[12px] text-ink-2 hover:text-ink md:flex"
+    >
+      <MonitorDown className="size-3.5 shrink-0" aria-hidden />
+      {tx('Uygulama olarak yükle', 'Install as app')}
+    </button>
   )
 }
 
@@ -235,6 +253,13 @@ function ThemeToggle() {
       // Storage unavailable; the choice lasts for this visit.
     }
   }
+  useEffect(() => {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+    for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+      const system = (meta.dataset.system ??= meta.content)
+      meta.content = theme === 'system' ? system : bg
+    }
+  }, [theme])
   return (
     <div role="radiogroup" aria-label={tx('Tema', 'Theme')} className="hidden rounded-lg border border-line bg-surface p-0.5 sm:inline-flex">
       {themes().map(({ value, label, icon: Icon }) => (

@@ -106,6 +106,8 @@ npx wiener-tools-claude
 
 The dashboard opens in your browser on its own. The first indexing takes from a few seconds to half a minute, depending on how much history you have; later starts read only the new records. Press Ctrl+C in the terminal to stop it.
 
+**Use it as an app.** The dashboard can also open in its own window with its own icon, without the address bar. In Chrome, Edge or Brave, press **Install as app** at the bottom of the menu; in Safari, use **Add to Dock** in the File menu. The app still connects to the server on this computer: if you open it while the server is off, a page shows how to start it, and once `npx wiener-tools-claude` is running the window switches to the dashboard on its own. If a dashboard window is already open, the command doesn't open another tab. The app is tied to the port it was installed from (4747 by default); if the dashboard opens on another port (because that port was taken or you passed `--port`), the app won't see it.
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `--port <n>` | `4747` | Port to listen on; if it is taken, the next one is tried |
