@@ -92,7 +92,7 @@ A year's messages, active days, tokens, longest streak, most worked-on projects 
 
 ### More than one account
 
-If you use more than one Claude account in the desktop app, an account picker appears at the bottom of the left menu. Pick an account and every screen shows only that account's sessions, cost and 5-hour window; the choice is remembered in your browser. The memory, instruction and settings files on the Environment screen are shared by all accounts, so they stay the same. Which account a session belongs to is read from the desktop app's account folders. Sessions with no record there, including Claude Code sessions in the terminal, are grouped under "Unknown account", so the accounts always add up to all of your data. Accounts are named after a shortened form of the e-mail address seen in `~/.claude.json` (`ada…@gmail.com`); an account whose e-mail hasn't been seen yet is shown by its order, such as "Account 2".
+If you use more than one Claude account in the desktop app, an account picker appears at the bottom of the left menu. Pick an account and every screen shows only that account's sessions, cost and 5-hour window; the choice is remembered in your browser. The measured limit percentages on the Cost screen come from the last reading the desktop app saved for that account. The memory, instruction and settings files on the Environment screen are shared by all accounts, so they stay the same. Which account a session belongs to is read from the desktop app's account folders. Sessions with no record there, including Claude Code sessions in the terminal, are grouped under "Unknown account", so the accounts always add up to all of your data. Accounts are named after a shortened form of the e-mail address seen in `~/.claude.json` (`ada…@gmail.com`); an account whose e-mail hasn't been seen yet is shown by its order, such as "Account 2".
 
 Most screens have "This week", "Last 30 days" and "All time" filters, and the choice stays in the address. The dashboard updates itself as files change and lists the sessions running right now separately.
 
@@ -147,6 +147,7 @@ You can override the price table with `~/.wiener-tools/claude/pricing.json` (dol
 | `~/.claude/projects/<project>/<session>/subagents/**` | Subagent transcripts; their cost is added to the main session |
 | `~/Library/Application Support/Claude/claude-code-sessions` | Desktop session titles, branches, worktrees and which account each belongs to |
 | `~/Library/Application Support/Claude/local-agent-mode-sessions` | Cowork session transcripts, titles and which account each belongs to |
+| `~/Library/Application Support/Claude/plan-usage-history.json` | 5-hour and weekly limit percentages saved by the desktop app; shown as the selected account's reading |
 | `~/.claude/history.jsonl` | Prompts of terminal sessions whose transcript was deleted: time, project and text |
 | `~/.claude/sessions/*.json` | Claude Code processes running right now |
 | `~/.claude.json` | Plan name, the last limit reading, skill and plugin usage counts, MCP server names and types |

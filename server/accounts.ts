@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { type Lang, pick } from '../shared/i18n.ts'
 import type { Account } from '../shared/types.ts'
 import { type AccountInfo, accountFile, planOf, readAccount } from './costs.ts'
@@ -63,8 +64,47 @@ export function listAccounts(db: Db, lang: Lang = 'tr'): Account[] {
   return accounts
 }
 
-export function accountInfo(db: Db, account: string): AccountInfo {
-  return readAccount(undefined, account) ?? { plan: learnedAccount(db, account)?.plan ?? null, usage: null }
+const listDir = (dir: string): string[] => {
+  try {
+    return fs.readdirSync(dir)
+  } catch {
+    return []
+  }
+}
+
+function ownOrgs(desktopDir: string, account: string): Set<string> {
+  const holders = new Map<string, string[]>()
+  for (const acct of listDir(desktopDir)) {
+    for (const org of listDir(path.join(desktopDir, acct))) {
+      if (listDir(path.join(desktopDir, acct, org)).some((f) => f.startsWith('local_') && f.endsWith('.json'))) holders.set(org, [...(holders.get(org) ?? []), acct])
+    }
+  }
+  return new Set([...holders].filter(([, accts]) => accts.length === 1 && accts[0] === account).map(([org]) => org))
+}
+
+function sampledUsage(desktopDir: string, account: string): AccountInfo['usage'] {
+  const orgs = ownOrgs(desktopDir, account)
+  if (!orgs.size) return null
+  let samples: unknown
+  try {
+    samples = (JSON.parse(fs.readFileSync(path.join(path.dirname(desktopDir), 'plan-usage-history.json'), 'utf8')) as Record<string, unknown>).samples
+  } catch {
+    return null
+  }
+  const window = (v: unknown) => (typeof v === 'number' ? { percent: v, resetsAt: null } : null)
+  let newest: AccountInfo['usage'] = null
+  for (const s of Array.isArray(samples) ? (samples as (Record<string, unknown> | null)[]) : []) {
+    const u = (s?.u ?? {}) as Record<string, unknown>
+    if (typeof s?.t !== 'number' || !orgs.has(s.org as string) || (newest && s.t <= newest.fetchedAt)) continue
+    if (typeof u.fh === 'number' || typeof u.sd === 'number') newest = { fetchedAt: s.t, fiveHour: window(u.fh), sevenDay: window(u.sd) }
+  }
+  return newest
+}
+
+export function accountInfo(db: Db, account: string, desktopDir: string | null = null): AccountInfo {
+  const info = readAccount(undefined, account) ?? { plan: learnedAccount(db, account)?.plan ?? null, usage: null }
+  const sampled = desktopDir ? sampledUsage(desktopDir, account) : null
+  return sampled && sampled.fetchedAt > (info.usage?.fetchedAt ?? 0) ? { ...info, usage: sampled } : info
 }
 
 export function accountScopes(db: Db, file: string): (account: string) => Db | null {

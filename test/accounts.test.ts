@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { accountInfo, accountScopes, listAccounts, maskEmail } from '../server/accounts.ts'
+import { limits } from '../server/costs.ts'
 import { UNKNOWN_ACCOUNT, openDb } from '../server/db.ts'
 import { Indexer } from '../server/indexer.ts'
 import { Pricing } from '../server/pricing.ts'
@@ -12,6 +13,8 @@ import { jsonl, prompt, reply, tempProjects, text } from './fixtures.ts'
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
 const ORG = '33333333-3333-4333-8333-333333333333'
+const ORG_B = '44444444-4444-4444-8444-444444444444'
+const H = 3_600_000
 const SLUG = '-Users-me-code-app'
 const configDir = process.env.CLAUDE_CONFIG_DIR
 
@@ -94,5 +97,40 @@ describe('accounts', () => {
     expect(listAccounts(db).map((x) => x.label)).toEqual(['ali…@example.com', 'kla…@example.com', 'Hesabı bilinmeyen'])
     expect(accountInfo(db, A).plan).toBe('Max 5x')
     expect(accountInfo(db, B)).toEqual({ plan: 'Max 20x', usage: null })
+  })
+
+  it("measures each account from the desktop app's samples for the org its own sessions live in", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'wiener-usage-'))
+    const desktop = path.join(home, 'claude-code-sessions')
+    const put = (account: string, org: string, name: string) => {
+      fs.mkdirSync(path.join(desktop, account, org), { recursive: true })
+      fs.writeFileSync(path.join(desktop, account, org, name), '{}')
+    }
+    put(A, ORG, 'local_a.json')
+    put(A, ORG_B, 'scheduled-tasks.json')
+    put(B, ORG_B, 'local_b.json')
+    put(B, ORG, 'scheduled-tasks.json')
+    const now = Date.now()
+    const ago = (minutes: number) => now - minutes * 60_000
+    fs.writeFileSync(path.join(home, 'plan-usage-history.json'), JSON.stringify({
+      version: 2,
+      samples: [
+        { t: ago(400), org: ORG, u: { fh: 90, sd: 50 } },
+        { t: ago(30), org: ORG, u: { fh: 12, sd: 40, xu: 0.5 } },
+        { t: ago(20), org: ORG, u: {} },
+        { t: ago(10), org: ORG_B, u: { fh: 70, sd: 85 } },
+      ],
+    }))
+    process.env.CLAUDE_CONFIG_DIR = home
+    const db = openDb(':memory:')
+    const a = accountInfo(db, A, desktop)
+    expect(a.usage).toEqual({ fetchedAt: ago(30), fiveHour: { percent: 12, resetsAt: null }, sevenDay: { percent: 40, resetsAt: null } })
+    expect(limits(db, a, now).measured).toMatchObject({ fresh: true, fiveHour: { percent: 12 }, sevenDay: { percent: 40 } })
+    expect(limits(db, a, now + 5 * H).measured).toMatchObject({ fresh: true, fiveHour: null, sevenDay: { percent: 40 } })
+    expect(limits(db, a, now + 6 * H).measured).toMatchObject({ fresh: false, fiveHour: null, sevenDay: null })
+    expect(limits(db, accountInfo(db, B, desktop), now).measured).toMatchObject({ fresh: true, fiveHour: { percent: 70 }, sevenDay: { percent: 85 } })
+    expect(accountInfo(db, UNKNOWN_ACCOUNT, desktop).usage).toBeNull()
+    put(A, ORG_B, 'local_c.json')
+    expect(accountInfo(db, B, desktop).usage).toBeNull()
   })
 })
