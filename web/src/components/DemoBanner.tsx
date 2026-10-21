@@ -36,7 +36,7 @@ export function DemoBanner() {
         {COMMAND}
         {copied ? <Check className="size-3.5 text-good" aria-hidden /> : <Copy className="size-3.5 text-ink-3" aria-hidden />}
       </button>
-      <a href="https://github.com/wienerlabs/wiener-claude" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline hover:underline-offset-2">
+      <a href="https://github.com/wienerlabs/wiener-lens" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline hover:underline-offset-2">
         GitHub <ArrowUpRight className="size-3.5" aria-hidden />
       </a>
     </div>

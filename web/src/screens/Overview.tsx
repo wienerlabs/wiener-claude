@@ -411,11 +411,11 @@ function EmptyState() {
       <p className="max-w-[48ch] text-[13px] text-ink-2">
         {tx(
           <>
-            Wiener Tools <code className="font-mono">~/.claude/projects</code> klasörünü okur. İlk oturumundan sonra burası kendiliğinden dolacak.
+            Wiener Lens <code className="font-mono">~/.claude/projects</code> klasörünü okur. İlk oturumundan sonra burası kendiliğinden dolacak.
             Başka bir profil kullanıyorsan <code className="font-mono">CLAUDE_CONFIG_DIR</code> ile başlat.
           </>,
           <>
-            Wiener Tools reads the <code className="font-mono">~/.claude/projects</code> folder. This page fills in on its own after your first session.
+            Wiener Lens reads the <code className="font-mono">~/.claude/projects</code> folder. This page fills in on its own after your first session.
             If you use a different profile, set <code className="font-mono">CLAUDE_CONFIG_DIR</code> when you start it.
           </>,
         )}

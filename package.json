@@ -1,16 +1,16 @@
 {
   "name": "wiener-tools-claude",
   "version": "0.7.0",
-  "description": "Claude Code kullanımın için yerel bir panel: ısı haritaları, oturum dökümleri, maliyet ve limitler, araçlar ve kanıta dayalı ipuçları. Veri makineden çıkmaz.",
+  "description": "A local dashboard for your Claude Code usage: heatmaps, session transcripts, cost and limits, tools and evidence-based tips. Your data never leaves your machine.",
   "license": "MIT",
   "author": "Wiener Labs",
-  "homepage": "https://github.com/wienerlabs/wiener-claude#readme",
+  "homepage": "https://github.com/wienerlabs/wiener-lens#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wienerlabs/wiener-claude.git"
+    "url": "git+https://github.com/wienerlabs/wiener-lens.git"
   },
   "bugs": {
-    "url": "https://github.com/wienerlabs/wiener-claude/issues"
+    "url": "https://github.com/wienerlabs/wiener-lens/issues"
   },
   "keywords": [
     "claude",

@@ -131,8 +131,8 @@ export function Replay({ id, focusKey = null }: { id: string; focusKey?: string 
                 "Claude Code deleted this session's transcript. The prompts below come from ~/.claude/history.jsonl, so replies, tool calls and cost are not available.",
               )
             : tx(
-                "Bu oturumun dökümü artık diskte yok. Claude Code eski dökümleri bir süre sonra siler; yukarıdaki sayılar Wiener Tools'un indeksinden geliyor.",
-                "This session's transcript is no longer on disk. Claude Code deletes old transcripts after a while, so the numbers above come from the Wiener Tools index.",
+                "Bu oturumun dökümü artık diskte yok. Claude Code eski dökümleri bir süre sonra siler; yukarıdaki sayılar Wiener Lens'in indeksinden geliyor.",
+                "This session's transcript is no longer on disk. Claude Code deletes old transcripts after a while, so the numbers above come from the Wiener Lens index.",
               )}
         </p>
       ) : null}
