@@ -1,7 +1,7 @@
 import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Monitor, MonitorDown, Moon, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Account, IndexStatus } from '../../shared/types.ts'
-import { DemoBanner } from './components/DemoBanner.tsx'
+import { CopyCommand, DemoBanner } from './components/DemoBanner.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { Mark } from './components/Mark.tsx'
 import { cx } from './components/ui.tsx'
@@ -9,7 +9,7 @@ import { getJson, useAccount, useApi } from './lib/api.ts'
 import { DEMO } from './lib/demo.ts'
 import { fmtRelative } from './lib/format.ts'
 import { setLang, tx, useLang } from './lib/i18n.ts'
-import { installApp, useInstallPrompt } from './lib/install.ts'
+import { installApp, useInstall } from './lib/install.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
 import { Costs } from './screens/Costs.tsx'
 import { Environment } from './screens/Environment.tsx'
@@ -116,18 +116,44 @@ export function App() {
 }
 
 function InstallButton() {
-  const prompt = useInstallPrompt()
-  if (!prompt) return null
+  const { prompt, way } = useInstall()
+  if (!DEMO && !prompt && !way) return null
   return (
-    <button
-      type="button"
-      onClick={installApp}
-      title={tx('Paneli kendi penceresi ve simgesiyle aç', 'Open the dashboard in its own window, with its own icon')}
-      className="hidden items-center gap-1.5 rounded-md text-left text-[12px] text-ink-2 hover:text-ink md:flex"
-    >
-      <MonitorDown className="size-3.5 shrink-0" aria-hidden />
-      {tx('Uygulama olarak yükle', 'Install as app')}
-    </button>
+    <div className="hidden md:block">
+      <button
+        type="button"
+        onClick={prompt ? installApp : undefined}
+        popoverTarget={prompt ? undefined : 'install-help'}
+        title={tx('Paneli kendi penceresi ve simgesiyle aç', 'Open the dashboard in its own window, with its own icon')}
+        className="install-anchor flex items-center gap-1.5 rounded-md text-left text-[12px] text-ink-2 hover:text-ink"
+      >
+        <MonitorDown className="size-3.5 shrink-0" aria-hidden />
+        {tx('Uygulama olarak yükle', 'Install as app')}
+      </button>
+      <div id="install-help" popover="auto" className="install-help w-72 rounded-xl border border-line bg-surface p-4 text-[13px] leading-relaxed text-ink-2 shadow-lg">
+        {DEMO ? (
+          <>
+            <p className="font-medium text-ink">{tx('Kendi bilgisayarına kur', 'Install it on your computer')}</p>
+            <p className="mt-1">
+              {tx(
+                'Terminalde çalıştır; panel tarayıcında açılır ve oradaki bu düğme onu uygulama olarak yükler. Node.js 22.13 ya da üstü gerekir.',
+                'Run this in a terminal. The dashboard opens in your browser, and this button there installs it as an app. Needs Node.js 22.13 or later.',
+              )}
+            </p>
+            <div className="mt-3">
+              <CopyCommand />
+            </div>
+          </>
+        ) : way === 'safari' ? (
+          tx("Safari menüsünde Dosya > Dock'a Ekle'yi seç.", 'In Safari, choose File > Add to Dock.')
+        ) : (
+          tx(
+            'Adres çubuğunun sağındaki yükle simgesine bas. Simge görünmüyorsa sayfayı bir kez yenile.',
+            'Click the install icon at the right end of the address bar. If it is not there, reload the page once.',
+          )
+        )}
+      </div>
+    </div>
   )
 }
 
