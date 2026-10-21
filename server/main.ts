@@ -12,7 +12,7 @@ import { Indexer } from './indexer.ts'
 import { coworkSessionsDir, dataDir, desktopSessionsDir, historyFile, liveSessionsDir, projectsDir, terminalLang } from './paths.ts'
 import { Pricing } from './pricing.ts'
 
-const VERSION = '0.7.0'
+const VERSION = '0.8.0'
 const LANG = terminalLang()
 const L = (tr: string, en: string) => pick(LANG, tr, en)
 
