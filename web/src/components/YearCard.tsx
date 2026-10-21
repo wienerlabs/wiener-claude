@@ -7,10 +7,10 @@ import { MARK_PATH } from './Mark.tsx'
 
 export const CARD_W = 1200
 export const CARD_H = 800
-export const CARD_FONTS = ['Bricolage Grotesque Variable', 'IBM Plex Sans']
+export const CARD_FONTS = ['Bricolage Grotesque Variable', 'Sora Variable']
 
 const DISPLAY = "'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif"
-const SANS = "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif"
+const SANS = "'Sora Variable', ui-sans-serif, system-ui, sans-serif"
 const PAD = 64
 const INNER = CARD_W - PAD * 2
 
