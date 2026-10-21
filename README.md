@@ -92,7 +92,7 @@ Bir yılın mesajları, aktif günleri, token'ları, en uzun serisi, en çok ça
 
 ### Birden fazla hesap
 
-Desktop uygulamasında birden fazla Claude hesabıyla çalışıyorsan sol menünün altında bir hesap seçici çıkar. Bir hesap seçince bütün ekranlar yalnızca o hesabın oturumlarını, maliyetini ve 5 saatlik penceresini gösterir; seçim tarayıcıda hatırlanır. Ortam ekranındaki memory, talimat ve ayar dosyaları bütün hesaplarda ortak olduğu için değişmez. Bir oturumun hangi hesaba ait olduğu desktop uygulamasının hesap klasörlerinden okunur. Orada kaydı olmayan oturumlar, terminaldeki Claude Code oturumları dahil, "Hesabı bilinmeyen" altında toplanır; böylece hesapların toplamı her zaman tüm veriye eşittir. Hesaplar `~/.claude.json` dosyasında görülen e-postanın kısaltmasıyla adlandırılır (`ada…@gmail.com`); e-postası henüz görülmemiş hesap "Hesap 2" gibi sırasıyla gösterilir.
+Desktop uygulamasında birden fazla Claude hesabıyla çalışıyorsan sol menünün altında bir hesap seçici çıkar. Bir hesap seçince bütün ekranlar yalnızca o hesabın oturumlarını, maliyetini ve 5 saatlik penceresini gösterir; seçim tarayıcıda hatırlanır. Maliyet ekranındaki ölçülen limit yüzdeleri, desktop uygulamasının o hesap için kaydettiği son ölçümden gelir. Ortam ekranındaki memory, talimat ve ayar dosyaları bütün hesaplarda ortak olduğu için değişmez. Bir oturumun hangi hesaba ait olduğu desktop uygulamasının hesap klasörlerinden okunur. Orada kaydı olmayan oturumlar, terminaldeki Claude Code oturumları dahil, "Hesabı bilinmeyen" altında toplanır; böylece hesapların toplamı her zaman tüm veriye eşittir. Hesaplar `~/.claude.json` dosyasında görülen e-postanın kısaltmasıyla adlandırılır (`ada…@gmail.com`); e-postası henüz görülmemiş hesap "Hesap 2" gibi sırasıyla gösterilir.
 
 Çoğu ekranda "Bu hafta", "Son 30 gün" ve "Tüm zamanlar" filtreleri vardır; seçim adreste durur. Dosyalar değiştikçe panel kendini günceller ve şu an çalışan oturumları ayrıca listeler.
 
@@ -145,6 +145,7 @@ Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok baş
 | `~/.claude/projects/<proje>/<oturum>/subagents/**` | Subagent dökümleri; maliyetleri ana oturuma yazılır |
 | `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si ve hangi hesaba ait olduğu |
 | `~/Library/Application Support/Claude/local-agent-mode-sessions` | Cowork oturumlarının dökümleri, başlıkları ve hangi hesaba ait oldukları |
+| `~/Library/Application Support/Claude/plan-usage-history.json` | Desktop uygulamasının kaydettiği 5 saatlik ve haftalık limit yüzdeleri; bir hesap seçiliyken o hesabın ölçümü olarak gösterilir |
 | `~/.claude/history.jsonl` | Dökümü silinmiş terminal oturumlarının prompt'ları: zaman, proje ve metin |
 | `~/.claude/sessions/*.json` | Şu an çalışan Claude Code süreçleri |
 | `~/.claude.json` | Plan adı, son limit ölçümü, skill ve plugin kullanım sayıları, MCP sunucularının adı ve türü |

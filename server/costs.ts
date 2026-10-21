@@ -120,15 +120,16 @@ export function limits(db: Db, account: AccountInfo | null, now = Date.now()): L
   const lastWeekly = hits.find((h) => h.kind === 'seven_day')
 
   const usage = account?.usage ?? null
-  const fresh = (w: { resetsAt: number | null } | null) => !!usage && now - usage.fetchedAt < MEASURE_FRESH_MS && (w?.resetsAt ?? 0) > now
+  const fresh = (w: { resetsAt: number | null } | null, span: number) =>
+    !!usage && !!w && now - usage.fetchedAt < MEASURE_FRESH_MS && (w.resetsAt ?? usage.fetchedAt + span) > now
   return {
     plan: account?.plan ?? null,
     measured: usage
       ? {
           fetchedAt: usage.fetchedAt,
-          fresh: fresh(usage.fiveHour) || fresh(usage.sevenDay),
-          fiveHour: fresh(usage.fiveHour) ? usage.fiveHour : null,
-          sevenDay: fresh(usage.sevenDay) ? usage.sevenDay : null,
+          fresh: fresh(usage.fiveHour, BLOCK) || fresh(usage.sevenDay, 7 * DAY),
+          fiveHour: fresh(usage.fiveHour, BLOCK) ? usage.fiveHour : null,
+          sevenDay: fresh(usage.sevenDay, 7 * DAY) ? usage.sevenDay : null,
         }
       : null,
     block,
