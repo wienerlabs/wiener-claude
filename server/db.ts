@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 // The index is a cache of ~/.claude. Bump this when the schema or the way records are read
 // changes; the old index is then dropped and rebuilt from the transcripts.
-const INDEX_VERSION = 6
+const INDEX_VERSION = 7
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -179,16 +179,32 @@ CREATE TABLE desktop_sessions (
   created_at INTEGER,
   last_activity_at INTEGER,
   model TEXT,
-  cwd TEXT
+  cwd TEXT,
+  account_id TEXT
 );
 `
 
 export type Db = DatabaseSync
 
+const MIGRATIONS: Record<number, string> = {
+  6: 'ALTER TABLE desktop_sessions ADD COLUMN account_id TEXT',
+}
+
 export function openDb(file: string): Db {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true })
   let db = new DatabaseSync(file)
-  if (readVersion(db) !== INDEX_VERSION) {
+  let version = readVersion(db)
+  while (version !== INDEX_VERSION) {
+    const sql = MIGRATIONS[version]
+    if (!sql) break
+    const next = version + 1
+    transaction(db, () => {
+      db.exec(sql)
+      db.exec(`PRAGMA user_version = ${next}`)
+    })
+    version = next
+  }
+  if (version !== INDEX_VERSION) {
     db.close()
     if (file !== ':memory:') for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true })
     db = new DatabaseSync(file)
@@ -196,6 +212,24 @@ export function openDb(file: string): Db {
     db.exec(`PRAGMA user_version = ${INDEX_VERSION}`)
   }
   db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY;')
+  return db
+}
+
+export const UNKNOWN_ACCOUNT = 'none'
+export const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const SESSION_TABLES = ['files', 'api_calls', 'prompts', 'tool_uses', 'events', 'cost_states', 'prs', 'texts', 'file_edits', 'limit_hits', 'tasks', 'plans']
+
+export function openAccountDb(file: string, account: string): Db {
+  if (account !== UNKNOWN_ACCOUNT && !ACCOUNT_ID.test(account)) throw new Error(`Geçersiz hesap: ${account}`)
+  const db = new DatabaseSync(file)
+  db.exec('PRAGMA temp_store = MEMORY;')
+  const scope = account === UNKNOWN_ACCOUNT
+    ? 'NOT IN (SELECT cli_session_id FROM main.desktop_sessions WHERE account_id IS NOT NULL AND cli_session_id IS NOT NULL)'
+    : `IN (SELECT cli_session_id FROM main.desktop_sessions WHERE account_id = '${account}')`
+  db.exec(`CREATE TEMP VIEW sessions AS SELECT * FROM main.sessions WHERE id ${scope}`)
+  db.exec(`CREATE TEMP VIEW desktop_sessions AS SELECT * FROM main.desktop_sessions WHERE cli_session_id ${scope}`)
+  for (const t of SESSION_TABLES) db.exec(`CREATE TEMP VIEW ${t} AS SELECT * FROM main.${t} WHERE session_id ${scope}`)
   return db
 }
 

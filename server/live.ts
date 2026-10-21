@@ -16,7 +16,7 @@ function isAlive(pid: number): boolean {
 }
 
 /** Claude Code processes running right now, from ~/.claude/sessions/<pid>.json. */
-export async function liveSessions(db: Db): Promise<LiveSession[]> {
+export async function liveSessions(db: Db, onlyIndexed = false): Promise<LiveSession[]> {
   const dir = liveSessionsDir()
   let names: string[]
   try {
@@ -34,6 +34,7 @@ export async function liveSessions(db: Db): Promise<LiveSession[]> {
       const sessionId = typeof o.sessionId === 'string' ? o.sessionId : null
       if (!sessionId || !Number.isInteger(pid) || !isAlive(pid)) continue
       const meta = title.get(sessionId) as { title: string | null; project: string | null } | undefined
+      if (onlyIndexed && !meta) continue
       out.push({
         sessionId,
         pid,

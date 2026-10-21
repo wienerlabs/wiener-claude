@@ -1,11 +1,11 @@
 import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Moon, Monitor, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { IndexStatus } from '../../shared/types.ts'
+import type { Account, IndexStatus } from '../../shared/types.ts'
 import { DemoBanner } from './components/DemoBanner.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { Mark } from './components/Mark.tsx'
 import { cx } from './components/ui.tsx'
-import { getJson, useApi } from './lib/api.ts'
+import { getJson, useAccount, useApi } from './lib/api.ts'
 import { DEMO } from './lib/demo.ts'
 import { fmtRelative } from './lib/format.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
@@ -52,7 +52,7 @@ export function App() {
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
-      <aside className="flex items-center gap-4 border-b border-line bg-bg px-4 py-3 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:gap-0 md:border-r md:border-b-0 md:px-3 md:py-5">
+      <aside className="flex flex-wrap items-center gap-4 border-b md:flex-nowrap border-line bg-bg px-4 py-3 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:gap-0 md:border-r md:border-b-0 md:px-3 md:py-5">
         <a href="/" onClick={(e) => onLinkClick(e, '/')} aria-label="Wiener Tools ana sayfa" className="flex items-center gap-2 rounded-md md:px-2 md:pb-6">
           <Mark />
           <span className="hidden font-display text-[17px] font-semibold tracking-[-0.02em] sm:inline">Wiener Tools</span>
@@ -80,6 +80,7 @@ export function App() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2 md:mt-auto md:ml-0 md:flex-col md:items-stretch md:gap-3 md:px-2">
+          <AccountPicker />
           <IndexBadge />
           <ThemeToggle />
         </div>
@@ -110,6 +111,28 @@ export function App() {
         </ErrorBoundary>
       </main>
     </div>
+  )
+}
+
+function AccountPicker() {
+  const { data } = useApi<Account[]>(DEMO ? null : '/api/accounts', { keepPrevious: true })
+  const [account, setAccount] = useAccount()
+  const accounts = data?.filter((a) => a.kind === 'account').length ?? 0
+  if (!data || (accounts < 2 && !account)) return null
+  return (
+    <select
+      aria-label="Hesap"
+      value={account ?? ''}
+      onChange={(e) => setAccount(e.target.value || null)}
+      className="h-8 min-w-0 max-w-36 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink-2 md:max-w-none"
+    >
+      <option value="">Tüm hesaplar</option>
+      {data.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.label} ({a.sessions})
+        </option>
+      ))}
+    </select>
   )
 }
 

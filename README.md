@@ -87,6 +87,10 @@ Claude Code'un hatırladıkları (memory), uyduğu talimatlar (`CLAUDE.md`), yar
 
 Bir yılın mesajları, aktif günleri, token'ları, en uzun serisi, en çok çalışılan projeleri ve araçları tek kartta. Kart PNG olarak indirilebilir; proje adları ve maliyet gizlenebilir. Resim tarayıcıda oluşturulur.
 
+### Birden fazla hesap
+
+Desktop uygulamasında birden fazla Claude hesabıyla çalışıyorsan sol menünün altında bir hesap seçici çıkar. Bir hesap seçince bütün ekranlar yalnızca o hesabın oturumlarını, maliyetini ve 5 saatlik penceresini gösterir; seçim tarayıcıda hatırlanır. Ortam ekranındaki memory, talimat ve ayar dosyaları bütün hesaplarda ortak olduğu için değişmez. Bir oturumun hangi hesaba ait olduğu desktop uygulamasının hesap klasörlerinden okunur. Orada kaydı olmayan oturumlar, terminaldeki Claude Code oturumları dahil, "Hesabı bilinmeyen" altında toplanır; böylece hesapların toplamı her zaman tüm veriye eşittir. Hesaplar `~/.claude.json` dosyasında görülen e-postanın kısaltmasıyla adlandırılır (`ada…@gmail.com`); e-postası henüz görülmemiş hesap "Hesap 2" gibi sırasıyla gösterilir.
+
 Çoğu ekranda "Bu hafta", "Son 30 gün" ve "Tüm zamanlar" filtreleri vardır; seçim adreste durur. Dosyalar değiştikçe panel kendini günceller ve şu an çalışan oturumları ayrıca listeler.
 
 ## Kurulum
@@ -123,7 +127,7 @@ Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok baş
 - **Veri makineden çıkmaz.** Panel hiçbir dış adrese istek atmaz; analizlerin hepsi yerel kurallarla yapılır.
 - **Yalnızca okur.** `~/.claude` içine hiçbir şey yazılmaz. Wiener Tools kendi indeksini `~/.wiener-tools/claude/index.db`, bütçe ayarını `settings.json` dosyasında tutar; indeks silinirse dökümlerden yeniden kurulur. Claude Code eski dökümleri bir süre sonra siler; indekslenmiş sayılar kalır.
 - **Yerel ağa kapalı.** Sunucu varsayılan olarak `127.0.0.1`'de dinler ve `Host` başlığını denetler; DNS rebinding ile erişim engellenir. Tek yazma işlemi (bütçe) JSON gövde ister ve `Origin` başlığını denetler.
-- **Gizli değerler gösterilmez.** MCP sunucularının ortam değişkenleri, başlıkları ve argümanları, ayarlardaki ortam değişkeni değerleri ve hook argümanları hiçbir zaman gösterilmez. `~/.claude.json` dosyasından e-posta, isim ve kimlikler okunmaz.
+- **Gizli değerler gösterilmez.** MCP sunucularının ortam değişkenleri, başlıkları ve argümanları, ayarlardaki ortam değişkeni değerleri ve hook argümanları hiçbir zaman gösterilmez. `~/.claude.json` dosyasından isim okunmaz. Hesap kimliği ve e-posta yalnızca birden fazla hesabı ayırmak için okunur; e-postanın yalnızca kısaltması (`ada…@gmail.com`) saklanır ve gösterilir.
 - **Dosya erişimi sınırlı.** Dosya içerikleri yalnızca sunucunun kendi listelediği memory ve `CLAUDE.md` dosyaları için verilir; istek bir yol değil, listedeki kimliği taşır.
 - **Hata metinleri kısaltılır.** Başarısız araç sonuçlarının yalnızca ilk 400 karakteri, ortam hatalarını test hatalarından ayırmak için yerel indekste tutulur.
 
@@ -134,9 +138,10 @@ Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok baş
 | --- | --- |
 | `~/.claude/projects/<proje>/<oturum>.jsonl` | Mesajlar, token kullanımı, araç çağrıları, başlıklar, PR bağlantıları |
 | `~/.claude/projects/<proje>/<oturum>/subagents/**` | Subagent dökümleri; maliyetleri ana oturuma yazılır |
-| `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si |
+| `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si ve hangi hesaba ait olduğu |
 | `~/.claude/sessions/*.json` | Şu an çalışan Claude Code süreçleri |
 | `~/.claude.json` | Plan adı, son limit ölçümü, skill ve plugin kullanım sayıları, MCP sunucularının adı ve türü |
+| `~/.claude.json`, `~/.claude.json.backup` | Hesap seçici için hesap kimliği ve e-postanın kısaltması |
 | `~/.claude/projects/<proje>/memory/*.md` | Memory dosyaları |
 | `~/.claude/CLAUDE.md`, `<proje>/CLAUDE.md` | Talimatlar |
 | `~/.claude/settings.json`, `~/.claude/plugins/installed_plugins.json` | Ayarlar ve kurulu plugin'ler |

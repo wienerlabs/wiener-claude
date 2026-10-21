@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAdaptorServer } from '@hono/node-server'
+import { accountScopes } from './accounts.ts'
 import { createApp } from './api.ts'
 import { openDb } from './db.ts'
 import { Indexer } from './indexer.ts'
@@ -75,7 +76,8 @@ function openBrowser(url: string): void {
 
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2))
-  const db = openDb(path.join(dataDir(), 'index.db'))
+  const dbFile = path.join(dataDir(), 'index.db')
+  const db = openDb(dbFile)
   const pricing = Pricing.load()
   const indexer = new Indexer(db, pricing, { projectsDir: projectsDir(), desktopDir: desktopSessionsDir() })
   const events = new EventEmitter()
@@ -83,7 +85,7 @@ async function main(): Promise<void> {
 
   const lan = opts.host === '0.0.0.0' || opts.host === '::'
   const allowedHosts = lan ? null : new Set(['localhost', '127.0.0.1', '[::1]', opts.host])
-  const app = createApp({ db, indexer, pricing, events, staticDir: findStaticDir(), allowedHosts })
+  const app = createApp({ db, indexer, pricing, events, staticDir: findStaticDir(), allowedHosts, accountDb: accountScopes(db, dbFile) })
 
   const server = createAdaptorServer({ fetch: app.fetch })
   const port = await new Promise<number>((resolve, reject) => {

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { StatementSync } from 'node:sqlite'
 import type { IndexStatus } from '../shared/types.ts'
-import { type Db, clearIndex, foldTurkish, getMeta, setMeta, transaction } from './db.ts'
+import { ACCOUNT_ID, type Db, clearIndex, foldTurkish, getMeta, setMeta, transaction } from './db.ts'
 import { readLinesFrom } from './jsonl.ts'
 import { type ApiFact, type Fact, type SessionFact, parseLine, parseTs } from './parse.ts'
 import type { Pricing } from './pricing.ts'
@@ -337,6 +337,7 @@ export class Indexer {
           parseTs(o.lastActivityAt),
           typeof o.model === 'string' ? o.model : null,
           typeof o.cwd === 'string' ? o.cwd : null,
+          accountOf(dir, f),
         ]
       } catch {
         continue // A half-written file; the next change event rereads it.
@@ -354,8 +355,8 @@ export class Indexer {
     }
     if (upserts.length || removed.length) {
       transaction(this.db, () => {
-        for (const r of upserts) this.st.upsertDesktop.run(...r)
         for (const key of removed) this.st.deleteDesktop.run(key)
+        for (const r of upserts) this.st.upsertDesktop.run(...r)
       })
     }
     return changed
@@ -434,14 +435,19 @@ function statements(db: Db) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
     insertLimitHit: p('INSERT OR IGNORE INTO limit_hits (uuid, session_id, ts, kind, resets_at) VALUES (?, ?, ?, ?, ?)'),
     upsertDesktop: p(`INSERT OR REPLACE INTO desktop_sessions
-      (cli_session_id, desktop_id, title, branch, worktree_name, archived, created_at, last_activity_at, model, cwd)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      (cli_session_id, desktop_id, title, branch, worktree_name, archived, created_at, last_activity_at, model, cwd, account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
     deleteDesktop: p('DELETE FROM desktop_sessions WHERE cli_session_id = ?'),
     insertPr: p(`INSERT INTO prs (url, session_id, number, repo, ts) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(url) DO UPDATE SET number = excluded.number, repo = excluded.repo`),
   }
 }
 type Statements = ReturnType<typeof statements>
+
+function accountOf(desktopDir: string, file: string): string | null {
+  const [account, , ...rest] = path.relative(desktopDir, file).split(path.sep)
+  return rest.length > 0 && account && ACCOUNT_ID.test(account) ? account : null
+}
 
 function mergeApi(a: ApiFact, b: ApiFact): ApiFact {
   // Streamed responses are logged once per content block; later lines can carry larger counts.
