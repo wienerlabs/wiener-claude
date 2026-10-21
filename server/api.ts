@@ -16,7 +16,7 @@ import type { Pricing } from './pricing.ts'
 import { projectDetail, projectList } from './projects.ts'
 import { parseRange, rangeBounds } from './range.ts'
 import * as q from './queries.ts'
-import { turnsOf } from './replay.ts'
+import { historyTurns, turnsOf } from './replay.ts'
 import { tipsReport } from './tips.ts'
 import { toolsReport } from './tools.ts'
 import { yearReport } from './year.ts'
@@ -221,16 +221,14 @@ export function createApp(ctx: AppContext): Hono {
     const file = db.prepare('SELECT path FROM files WHERE session_id = ? AND is_subagent = 0').get(id) as { path: string } | undefined
     const from = Math.max(0, Number(c.req.query('from') ?? 0) || 0)
     const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? REPLAY_PAGE) || REPLAY_PAGE))
-    if (!file || !fs.existsSync(file.path)) {
-      return c.json({ session, turns: [], from: 0, totalTurns: 0, focusTurn: null, fileMissing: true } satisfies ReplayPage)
-    }
-    const { turns, keyIndex } = await turnsOf(file.path, ctx.pricing, langOf(c))
+    const transcript = file && fs.existsSync(file.path) ? file.path : null
+    const { turns, keyIndex } = transcript ? await turnsOf(transcript, ctx.pricing, langOf(c)) : historyTurns(db, id, langOf(c))
     // ?around=<key> opens the page holding a search hit, with a little context before it.
     const around = c.req.query('around')
     const focusTurn = around ? (keyIndex.get(around) ?? keyIndex.get(around.split(':')[0] ?? '') ?? null) : null
     const start = focusTurn !== null ? Math.max(0, focusTurn - 2) : from
     return c.json({
-      session, turns: turns.slice(start, start + limit), from: start, totalTurns: turns.length, focusTurn, fileMissing: false,
+      session, turns: turns.slice(start, start + limit), from: start, totalTurns: turns.length, focusTurn, fileMissing: !transcript,
     } satisfies ReplayPage)
   })
 

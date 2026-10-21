@@ -2,6 +2,7 @@ import path from 'node:path'
 
 export const SCRATCH_PROJECT_KEY = 'scratch'
 export const SCRATCH_PROJECT_NAME = 'Klasörsüz oturumlar'
+export const COWORK_PROJECT_KEY = 'cowork'
 
 /**
  * Groups a working directory under the project it belongs to. Worktrees count toward their
@@ -14,6 +15,7 @@ export function projectOf(cwd: string | null, slug: string | null): { key: strin
   }
   const p = cwd.replace(/\\/g, '/').replace(/\/+$/, '')
   if (p.includes('/scratch-workspaces/')) return { key: SCRATCH_PROJECT_KEY, name: SCRATCH_PROJECT_NAME }
+  if (p.startsWith('/sessions/') || p.includes('/local-agent-mode-sessions/')) return { key: COWORK_PROJECT_KEY, name: 'Cowork' }
   const wt = p.indexOf('/.claude/worktrees/')
   const root = wt >= 0 ? p.slice(0, wt) : p
   return { key: root, name: path.posix.basename(root) || root }

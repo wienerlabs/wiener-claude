@@ -5,7 +5,7 @@ import { pick } from '../shared/i18n.ts'
 import type { IndexStatus } from '../shared/types.ts'
 import { ACCOUNT_ID, type Db, clearIndex, foldTurkish, getMeta, setMeta, transaction } from './db.ts'
 import { readLinesFrom } from './jsonl.ts'
-import { type ApiFact, type Fact, type SessionFact, parseLine, parseTs } from './parse.ts'
+import { type ApiFact, type Fact, HISTORY_KEY, type SessionFact, parseHistoryLine, parseLine, parseTs } from './parse.ts'
 import { terminalLang } from './paths.ts'
 import type { Pricing } from './pricing.ts'
 import { projectOf } from './project.ts'
@@ -14,6 +14,8 @@ import { localParts } from './time.ts'
 export interface IndexerOptions {
   projectsDir: string
   desktopDir: string | null
+  coworkDir?: string | null
+  historyFile?: string | null
 }
 
 interface FileRow {
@@ -80,7 +82,8 @@ export class Indexer {
     const started = Date.now()
     let changed = this.refreshCosts()
 
-    const found = await discover(this.opts.projectsDir)
+    const roots = [this.opts.projectsDir, ...(await coworkProjectRoots(this.opts.coworkDir ?? null))]
+    const found = (await Promise.all(roots.map(discover))).flat().sort((a, b) => Number(a.isSubagent) - Number(b.isSubagent))
     const stats = await Promise.all(found.map((f) => fs.stat(f.path).catch(() => null)))
     const work: { file: FoundFile; row: FileRow; size: number; mtimeMs: number; ino: number }[] = []
     let truncated = false
@@ -125,9 +128,43 @@ export class Indexer {
       this.status.filesDone++
     }
 
+    changed = (await this.scanHistory()) || changed
     changed = (await this.scanDesktop()) || changed
     this.status = { ...this.status, state: 'ready', lastScanAt: Date.now(), lastScanMs: Date.now() - started }
     return changed
+  }
+
+  private async scanHistory(): Promise<boolean> {
+    const file = this.opts.historyFile
+    const st = file ? await fs.stat(file).catch(() => null) : null
+    if (!file || !st) return false
+    let row = this.st.fileByPath.get(file) as FileRow | undefined
+    if (!row) {
+      const { id } = this.st.insertFile.get(file, '', 0) as { id: number }
+      row = { id, path: file, size: 0, mtime_ms: 0, ino: 0, offset: 0 }
+    }
+    if (st.size === row.size && st.mtimeMs === row.mtime_ms) return false
+    const rewritten = st.size < row.offset || (row.ino !== 0 && st.ino !== row.ino)
+    const bySlug = new Map<string, Fact[]>()
+    const end = await readLinesFrom(file, rewritten ? 0 : row.offset, (line) => {
+      let o: unknown
+      try {
+        o = JSON.parse(line)
+      } catch {
+        return
+      }
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return
+      const facts = parseHistoryLine(o as Record<string, unknown>)
+      const first = facts[0]
+      if (!first || this.st.hasTranscript.get(first.sessionId)) return
+      const slug = first.kind === 'session' && first.cwd ? first.cwd.replace(/[^a-zA-Z0-9]/g, '-') : ''
+      const group = bySlug.get(slug)
+      if (group) group.push(...facts)
+      else bySlug.set(slug, facts)
+    })
+    for (const [slug, facts] of bySlug) this.apply(facts, row.id, slug, true)
+    this.st.updateFile.run(st.size, st.mtimeMs, st.ino, end, row.id)
+    return bySlug.size > 0
   }
 
   private async indexFile(file: FoundFile, row: FileRow): Promise<number> {
@@ -159,7 +196,7 @@ export class Indexer {
   }
 
   /** Writes a batch of facts in one transaction. */
-  apply(facts: Fact[], fileId: number, slug: string): void {
+  apply(facts: Fact[], fileId: number, slug: string, fromHistory = false): void {
     const sessions = new Map<
       string,
       { first: SessionFact; last: SessionFact; cwdFact: SessionFact | null; branchFact: SessionFact | null; versionFact: SessionFact | null; entry: string | null }
@@ -188,6 +225,10 @@ export class Indexer {
     }
 
     transaction(this.db, () => {
+      for (const id of fromHistory ? [] : sessions.keys()) {
+        this.st.dropHistoryPrompts.run(id)
+        this.st.dropHistoryTexts.run(id)
+      }
       for (const [id, s] of sessions) {
         const cwd = s.cwdFact?.cwd ?? null
         const project = projectOf(cwd, slug)
@@ -309,15 +350,16 @@ export class Indexer {
    * message just to bump their activity time.
    */
   private async scanDesktop(): Promise<boolean> {
-    const dir = this.opts.desktopDir
-    if (!dir) return false
-    const files = await findFiles(dir, 3, (name) => name.startsWith('local_') && name.endsWith('.json'))
-    const stats = await Promise.all(files.map((f) => fs.stat(f).then((s) => s.mtimeMs, () => null)))
+    const dirs = [this.opts.desktopDir, this.opts.coworkDir].filter((d): d is string => !!d)
+    if (dirs.length === 0) return false
+    const isMeta = (name: string) => name.startsWith('local_') && name.endsWith('.json')
+    const files = (await Promise.all(dirs.map(async (dir) => (await findFiles(dir, 3, isMeta)).map((f) => ({ dir, f }))))).flat()
+    const stats = await Promise.all(files.map(({ f }) => fs.stat(f).then((s) => s.mtimeMs, () => null)))
     let changed = false
     const upserts: (string | number | null)[][] = []
     const removed: string[] = []
     const seen = new Set<string>()
-    for (const [i, f] of files.entries()) {
+    for (const [i, { dir, f }] of files.entries()) {
       const mtime = stats[i]
       if (mtime == null) continue
       seen.add(f)
@@ -369,6 +411,9 @@ function statements(db: Db) {
   const p = (sql: string): StatementSync => db.prepare(sql)
   return {
     fileByPath: p('SELECT id, path, size, mtime_ms, ino, offset FROM files WHERE path = ?'),
+    hasTranscript: p('SELECT 1 AS yes FROM files WHERE session_id = ? LIMIT 1'),
+    dropHistoryPrompts: p(`DELETE FROM prompts WHERE session_id = ? AND uuid LIKE '${HISTORY_KEY}%'`),
+    dropHistoryTexts: p(`DELETE FROM texts WHERE session_id = ? AND key LIKE '${HISTORY_KEY}%'`),
     insertFile: p('INSERT INTO files (path, session_id, is_subagent) VALUES (?, ?, ?) RETURNING id'),
     updateFile: p('UPDATE files SET size = ?, mtime_ms = ?, ino = ?, offset = ? WHERE id = ?'),
     upsertSession: p(`
@@ -494,6 +539,21 @@ export async function discover(root: string): Promise<FoundFile[]> {
   )
   // Main files first, so sessions exist before their subagents report in.
   return perSlug.flat().sort((a, b) => Number(a.isSubagent) - Number(b.isSubagent))
+}
+
+async function coworkProjectRoots(dir: string | null): Promise<string[]> {
+  if (!dir) return []
+  const roots: string[] = []
+  for (const account of await readDir(dir)) {
+    if (!account.isDirectory()) continue
+    for (const org of await readDir(path.join(dir, account.name))) {
+      if (!org.isDirectory()) continue
+      for (const session of await readDir(path.join(dir, account.name, org.name))) {
+        if (session.isDirectory() && session.name.startsWith('local_')) roots.push(path.join(dir, account.name, org.name, session.name, '.claude', 'projects'))
+      }
+    }
+  }
+  return roots
 }
 
 async function readDir(dir: string) {

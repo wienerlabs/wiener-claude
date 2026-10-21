@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises'
 import { type Lang, formatInt, pick } from '../shared/i18n.ts'
 import type { ReplayItem, ReplayTurn } from '../shared/types.ts'
+import type { Db } from './db.ts'
 import { readLinesFrom } from './jsonl.ts'
-import { cleanPrompt, isHumanPrompt, parseTs, promptKind, userText } from './parse.ts'
+import { HISTORY_KEY, cleanPrompt, isHumanPrompt, parseTs, promptKind, userText } from './parse.ts'
 import type { Pricing, Usage } from './pricing.ts'
 
 type Json = Record<string, unknown>
@@ -84,6 +85,20 @@ export interface BuiltTurns {
   turns: ReplayTurn[]
   /** Record uuid or tool id -> index of the turn it belongs to; used to open search hits. */
   keyIndex: Map<string, number>
+}
+
+type PromptKindOfTurn = NonNullable<ReplayTurn['prompt']>['kind']
+
+export function historyTurns(db: Db, sessionId: string, lang: Lang): BuiltTurns {
+  const rows = db
+    .prepare(`SELECT p.uuid, p.ts, p.kind, COALESCE(t.text, p.preview) AS text FROM prompts p LEFT JOIN texts t ON t.key = p.uuid
+      WHERE p.session_id = ? AND p.uuid LIKE '${HISTORY_KEY}%' ORDER BY p.ts`)
+    .all(sessionId) as { uuid: string; ts: number; kind: PromptKindOfTurn; text: string }[]
+  const turns = rows.map((r, index): ReplayTurn => ({
+    index, ts: r.ts, prompt: { text: clip(r.text, MAX_TEXT, lang), kind: r.kind, images: 0, key: r.uuid },
+    items: [], cost: 0, outputTokens: 0, toolCalls: 0, errors: 0,
+  }))
+  return { turns, keyIndex: new Map(rows.map((r, index) => [r.uuid, index])) }
 }
 
 export function turnBuilder(pricing: Pricing, lang: Lang = 'tr'): { add: (o: Json) => void; finish: () => BuiltTurns } {

@@ -168,6 +168,22 @@ export function previewOf(text: string, max = 280): string {
 const MAX_SEARCH_TEXT = 20_000
 const clipText = (t: string) => (t.length > MAX_SEARCH_TEXT ? t.slice(0, MAX_SEARCH_TEXT) : t)
 
+export const HISTORY_KEY = 'history:'
+
+export function parseHistoryLine(o: Json): Fact[] {
+  const ts = parseTs(o.timestamp)
+  const sessionId = str(o.sessionId)
+  const text = typeof o.display === 'string' ? o.display.trim() : ''
+  if (ts === null || !sessionId || !text) return []
+  const uuid = `${HISTORY_KEY}${sessionId}:${ts}`
+  const kind: PromptKind = text.startsWith('/') ? 'command' : text.startsWith('!') ? 'bash' : 'prompt'
+  return [
+    { kind: 'session', sessionId, ts, cwd: str(o.project), gitBranch: null, version: null, entrypoint: 'cli' },
+    { kind: 'prompt', uuid, sessionId, ts, promptKind: kind, preview: previewOf(text) },
+    { kind: 'text', key: uuid, sessionId, ts, textKind: 'prompt', text: clipText(text) },
+  ]
+}
+
 /** The start of a failed tool result: enough to tell "command not found" from a failing test. */
 const MAX_ERROR_TEXT = 400
 

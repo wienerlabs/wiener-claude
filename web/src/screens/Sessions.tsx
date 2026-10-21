@@ -190,7 +190,7 @@ function SessionItem({ s, active, href }: { s: SessionRow; active: boolean; href
           ) : null}
         </span>
         <span className="mt-1 block font-mono text-[12px] text-ink-2 num">
-          {fmtCount(s.messages, 'mesaj', 'message')} · {fmtUsd(s.costEstimate)} · {fmtDuration(s.activeMs)}
+          {fmtCount(s.messages, 'mesaj', 'message')} · {s.historyOnly ? tx('yalnızca prompt geçmişi', 'prompt history only') : `${fmtUsd(s.costEstimate)} · ${fmtDuration(s.activeMs)}`}
           {s.toolErrors > 0 ? <span className="text-danger"> · {fmtCount(s.toolErrors, 'hata', 'error')}</span> : null}
         </span>
         {s.match ? (

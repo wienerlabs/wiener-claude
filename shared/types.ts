@@ -138,6 +138,7 @@ export interface SessionRow {
   prNumber: number | null
   models: string[]
   archived: boolean
+  historyOnly: boolean
   /** Present when the list was filtered by a search query. */
   match?: SearchMatch | null
 }

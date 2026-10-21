@@ -265,7 +265,8 @@ export function sessionRows(db: Db, ids: string[]): SessionRow[] {
         (SELECT COALESCE(sum(added), 0) FROM file_edits WHERE session_id = s.id) AS lines_added,
         (SELECT COALESCE(sum(removed), 0) FROM file_edits WHERE session_id = s.id) AS lines_removed,
         (SELECT url FROM prs WHERE session_id = s.id ORDER BY ts DESC LIMIT 1) AS pr_url,
-        (SELECT number FROM prs WHERE session_id = s.id ORDER BY ts DESC LIMIT 1) AS pr_number
+        (SELECT number FROM prs WHERE session_id = s.id ORDER BY ts DESC LIMIT 1) AS pr_number,
+        NOT EXISTS (SELECT 1 FROM files WHERE session_id = s.id) AS history_only
       FROM sessions s LEFT JOIN desktop_sessions d ON d.cli_session_id = s.id
       WHERE s.id IN (${inList})`).all(p) as Row[]).map((r) => [String(r.id), r]),
   )
@@ -320,6 +321,7 @@ export function sessionRows(db: Db, ids: string[]): SessionRow[] {
       prNumber: (r.pr_number as number | null) ?? null,
       models: r.models ? String(r.models).split(',').sort() : [],
       archived: r.archived === 1,
+      historyOnly: r.history_only === 1,
     })
   }
   return out

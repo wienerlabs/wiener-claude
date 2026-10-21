@@ -9,7 +9,7 @@ import { accountScopes } from './accounts.ts'
 import { createApp } from './api.ts'
 import { openDb } from './db.ts'
 import { Indexer } from './indexer.ts'
-import { dataDir, desktopSessionsDir, liveSessionsDir, projectsDir, terminalLang } from './paths.ts'
+import { coworkSessionsDir, dataDir, desktopSessionsDir, historyFile, liveSessionsDir, projectsDir, terminalLang } from './paths.ts'
 import { Pricing } from './pricing.ts'
 
 const VERSION = '0.7.0'
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   const dbFile = path.join(dataDir(), 'index.db')
   const db = openDb(dbFile)
   const pricing = Pricing.load()
-  const indexer = new Indexer(db, pricing, { projectsDir: projectsDir(), desktopDir: desktopSessionsDir() })
+  const indexer = new Indexer(db, pricing, { projectsDir: projectsDir(), desktopDir: desktopSessionsDir(), coworkDir: coworkSessionsDir(), historyFile: historyFile() })
   const events = new EventEmitter()
   events.setMaxListeners(100)
 
