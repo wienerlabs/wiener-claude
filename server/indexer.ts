@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { StatementSync } from 'node:sqlite'
 import { pick } from '../shared/i18n.ts'
+import { PACKAGE } from '../shared/product.ts'
 import type { IndexStatus } from '../shared/types.ts'
 import { ACCOUNT_ID, type Db, clearIndex, foldTurkish, getMeta, setMeta, transaction } from './db.ts'
 import { readLinesFrom } from './jsonl.ts'
@@ -123,7 +124,7 @@ export class Indexer {
         this.st.updateFile.run(w.size, w.mtimeMs, w.ino, offset, w.row.id)
         changed = true
       } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`wiener-tools-claude: ${w.file.path} ${pick(terminalLang(), 'okunamadı', 'could not be read')}:`, err)
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`${PACKAGE}: ${w.file.path} ${pick(terminalLang(), 'okunamadı', 'could not be read')}:`, err)
       }
       this.status.filesDone++
     }

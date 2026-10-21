@@ -7,7 +7,7 @@
 A local dashboard for your Claude Code usage: heatmaps, session transcripts,<br />
 cost and limits, tool usage and evidence-based tips.
 
-[![npm](https://img.shields.io/npm/v/wiener-tools-claude?color=1c5cab&label=npm)](https://www.npmjs.com/package/wiener-tools-claude)
+[![npm](https://img.shields.io/npm/v/wiener-tools-lens?color=1c5cab&label=npm)](https://www.npmjs.com/package/wiener-tools-lens)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1c5cab)](LICENSE)
 [![Node.js 22.13+](https://img.shields.io/badge/node-%E2%89%A5%2022.13-1c5cab)](https://nodejs.org)
 
@@ -16,7 +16,7 @@ cost and limits, tool usage and evidence-based tips.
 </div>
 
 ```bash
-npx wiener-tools-claude
+npx wiener-tools-lens
 ```
 
 <picture>
@@ -101,12 +101,14 @@ Most screens have "This week", "Last 30 days" and "All time" filters, and the ch
 Requires Node.js 22.13 or later (for the built-in SQLite). Run it on the computer where you use Claude Code:
 
 ```bash
-npx wiener-tools-claude
+npx wiener-tools-lens
 ```
 
 The dashboard opens in your browser on its own. The first indexing takes from a few seconds to half a minute, depending on how much history you have; later starts read only the new records. Press Ctrl+C in the terminal to stop it.
 
-**Use it as an app.** The dashboard can also open in its own window with its own icon, without the address bar. In Chrome, Edge or Brave, press **Install as app** at the bottom of the menu; in Safari, use **Add to Dock** in the File menu. The app still connects to the server on this computer: if you open it while the server is off, a page shows how to start it, and once `npx wiener-tools-claude` is running the window switches to the dashboard on its own. If a dashboard window is already open, the command doesn't open another tab. The app is tied to the port it was installed from (4747 by default); if the dashboard opens on another port (because that port was taken or you passed `--port`), the app won't see it.
+Up to 0.7.0 the package was called `wiener-tools-claude`. The new one reads the same index (`~/.wiener-tools/claude`), so nothing is lost when you switch.
+
+**Use it as an app.** The dashboard can also open in its own window with its own icon, without the address bar. In Chrome, Edge or Brave, press **Install as app** at the bottom of the menu; in Safari, use **Add to Dock** in the File menu. The app still connects to the server on this computer: if you open it while the server is off, a page shows how to start it, and once `npx wiener-tools-lens` is running the window switches to the dashboard on its own. If a dashboard window is already open, the command doesn't open another tab. The app is tied to the port it was installed from (4747 by default); if the dashboard opens on another port (because that port was taken or you passed `--port`), the app won't see it.
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -118,7 +120,7 @@ The dashboard opens in your browser on its own. The first indexing takes from a 
 
 | Environment variable | Description |
 | --- | --- |
-| `CLAUDE_CONFIG_DIR` | Another Claude profile: `CLAUDE_CONFIG_DIR=~/.claude-work npx wiener-tools-claude` |
+| `CLAUDE_CONFIG_DIR` | Another Claude profile: `CLAUDE_CONFIG_DIR=~/.claude-work npx wiener-tools-lens` |
 | `WIENER_DATA_DIR` | Folder for the index and settings (default `~/.wiener-tools/claude`) |
 | `WIENER_PORT` | Default port |
 | `WIENER_LANG` | Language of the terminal output (`tr` or `en`); the system language if unset |

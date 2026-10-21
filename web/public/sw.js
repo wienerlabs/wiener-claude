@@ -25,7 +25,7 @@ code{display:inline-block;padding:9px 14px;border:1px solid var(--line);border-r
 <svg viewBox="0 0 607 424" aria-hidden="true"><path fill-rule="evenodd" d="${MARK}"/></svg>
 <h1 data-en="Wiener Lens is not running">Wiener Lens çalışmıyor</h1>
 <p data-en="Run this in a terminal to start it. This window reloads by itself once the dashboard is up.">Başlatmak için terminalde şunu çalıştır. Panel açılınca bu pencere kendiliğinden yenilenir.</p>
-<code>npx wiener-tools-claude</code>
+<code>npx wiener-tools-lens</code>
 </main>
 <script>
 let saved = null

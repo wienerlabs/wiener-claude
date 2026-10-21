@@ -1,6 +1,7 @@
 // The public demo build answers API requests from recorded files (see scripts/demo). Lists and
 // transcripts were recorded whole; paging and search over them happen here.
 import { demoFile } from '../../../shared/demo.ts'
+import { RUN_COMMAND } from '../../../shared/product.ts'
 import type { ReplayPage, SessionList } from '../../../shared/types.ts'
 import { getLang, tx } from './i18n.ts'
 
@@ -10,7 +11,7 @@ const fold = (s: string) => s.toLocaleLowerCase(getLang()).replace(/ı/g, 'i').n
 
 async function recorded<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(`/demo-api/${demoFile(url)}`, { signal })
-  if (!res.ok) throw new Error(tx('Bu görünüm demoda yok. Kendi verinle denemek için: npx wiener-tools-claude', 'This view is not in the demo. To try it with your own data: npx wiener-tools-claude'))
+  if (!res.ok) throw new Error(tx(`Bu görünüm demoda yok. Kendi verinle denemek için: ${RUN_COMMAND}`, `This view is not in the demo. To try it with your own data: ${RUN_COMMAND}`))
   return (await res.json()) as T
 }
 

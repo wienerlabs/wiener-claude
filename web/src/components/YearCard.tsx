@@ -1,5 +1,6 @@
 import { type Ref, useMemo } from 'react'
 import type { YearReport } from '../../../shared/types.ts'
+import { RUN_COMMAND } from '../../../shared/product.ts'
 import { dayKey, fmtCompact, fmtCount, fmtDayShort, fmtInt, fmtUsd, mcpServerLabel, monthsShort, parseDay } from '../lib/format.ts'
 import { tx } from '../lib/i18n.ts'
 import { HEAT, levelOf, quartiles } from './heatmap/scale.tsx'
@@ -100,7 +101,7 @@ export function YearCard({ data, options, ref }: { data: YearReport; options: Ye
       />
 
       <text x={PAD} y={CARD_H - 40} fontFamily={SANS} fontSize={15} fill="var(--ink-3)">
-        npx wiener-tools-claude
+        {RUN_COMMAND}
       </text>
       <text x={CARD_W - PAD} y={CARD_H - 40} textAnchor="end" fontFamily={SANS} fontSize={15} fill="var(--ink-3)">
         +{fmtCount(data.totals.linesAdded, 'satır', 'line')} · {fmtCount(data.totals.files, 'dosya', 'file')} · {fmtCount(data.totals.prs, 'PR', 'PR')}

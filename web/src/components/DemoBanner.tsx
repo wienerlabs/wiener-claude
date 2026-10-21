@@ -1,8 +1,7 @@
 import { ArrowUpRight, Check, Copy } from 'lucide-react'
 import { useState } from 'react'
+import { RUN_COMMAND } from '../../../shared/product.ts'
 import { tx } from '../lib/i18n.ts'
-
-const COMMAND = 'npx wiener-tools-claude'
 
 /** Shown on the public demo: what this is, and how to see your own data instead. */
 export function DemoBanner() {
@@ -29,7 +28,7 @@ export function CopyCommand() {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(COMMAND)
+      await navigator.clipboard.writeText(RUN_COMMAND)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -41,9 +40,9 @@ export function CopyCommand() {
       type="button"
       onClick={copy}
       className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[12px] text-ink hover:border-line-strong"
-      aria-label={tx(`${COMMAND} komutunu kopyala`, `Copy ${COMMAND}`)}
+      aria-label={tx(`${RUN_COMMAND} komutunu kopyala`, `Copy ${RUN_COMMAND}`)}
     >
-      {COMMAND}
+      {RUN_COMMAND}
       {copied ? <Check className="size-3.5 text-good" aria-hidden /> : <Copy className="size-3.5 text-ink-3" aria-hidden />}
     </button>
   )

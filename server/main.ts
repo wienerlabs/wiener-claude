@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAdaptorServer } from '@hono/node-server'
 import { type Lang, isLang, pick } from '../shared/i18n.ts'
+import { PACKAGE } from '../shared/product.ts'
 import { accountScopes } from './accounts.ts'
 import { createApp } from './api.ts'
 import { openDb } from './db.ts'
@@ -19,7 +20,7 @@ const L = (tr: string, en: string) => pick(LANG, tr, en)
 const HELP = L(
   `Wiener Lens ${VERSION}: Claude Code kullanımını yerelde gösterir.
 
-Kullanım: wiener-tools-claude [seçenekler]
+Kullanım: ${PACKAGE} [seçenekler]
 
   --port <n>    Dinlenecek port (varsayılan 4747, doluysa bir sonraki)
   --host <h>    Bağlanılacak adres (varsayılan 127.0.0.1). 0.0.0.0 panelini yerel ağa açar.
@@ -32,7 +33,7 @@ Ortam değişkenleri: CLAUDE_CONFIG_DIR, WIENER_DATA_DIR, WIENER_PORT, WIENER_LA
 `,
   `Wiener Lens ${VERSION}: your Claude Code usage, shown locally.
 
-Usage: wiener-tools-claude [options]
+Usage: ${PACKAGE} [options]
 
   --port <n>    Port to listen on (default 4747, or the next free one)
   --host <h>    Address to bind (default 127.0.0.1). 0.0.0.0 opens the panel to your local network.
@@ -144,7 +145,7 @@ async function main(): Promise<void> {
     if (timer) return
     timer = setTimeout(() => {
       timer = null
-      indexer.scan().then((changed) => changed && events.emit('update'), (err) => console.error(`wiener-tools-claude: ${L('tarama hatası', 'scan failed')}`, err))
+      indexer.scan().then((changed) => changed && events.emit('update'), (err) => console.error(`${PACKAGE}: ${L('tarama hatası', 'scan failed')}`, err))
     }, 750)
   }
   const started = Date.now()
@@ -155,7 +156,7 @@ async function main(): Promise<void> {
       process.stdout.write(L(`  İndeks hazır: ${files} dosya, ${secs} sn\n`, `  Index ready: ${files} ${files === 1 ? 'file' : 'files'}, ${secs}s\n`))
       if (changed) events.emit('update')
     },
-    (err) => console.error(`wiener-tools-claude: ${L('ilk tarama başarısız', 'first scan failed')}`, err),
+    (err) => console.error(`${PACKAGE}: ${L('ilk tarama başarısız', 'first scan failed')}`, err),
   )
   watch(projectsDir(), rescan)
   watch(desktopSessionsDir(), rescan)

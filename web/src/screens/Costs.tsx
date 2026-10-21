@@ -2,6 +2,7 @@ import { CircleGauge, Info } from 'lucide-react'
 import { useState } from 'react'
 import { withPossessive } from '../../../shared/tr.ts'
 import type { CostReport, LimitHit, Limits, RangeKey, TipsReport } from '../../../shared/types.ts'
+import { RUN_COMMAND } from '../../../shared/product.ts'
 import { DailyBars, HBars, ShareBar } from '../components/charts.tsx'
 import { TipLinks } from '../components/TipLinks.tsx'
 import { Card, CardHeader, ErrorNote, Skeleton, cx } from '../components/ui.tsx'
@@ -349,8 +350,8 @@ function BudgetCard({ report }: { report: CostReport }) {
       if (DEMO) {
         throw new Error(
           tx(
-            'Demoda bütçe kaydedilmez. Kendi panelinde npx wiener-tools-claude ile dene.',
-            "The demo doesn't save budgets. Try it on your own dashboard with npx wiener-tools-claude.",
+            `Demoda bütçe kaydedilmez. Kendi panelinde ${RUN_COMMAND} ile dene.`,
+            `The demo doesn't save budgets. Try it on your own dashboard with ${RUN_COMMAND}.`,
           ),
         )
       }

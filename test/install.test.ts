@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { installWay } from '../web/src/lib/install.ts'
+import { RUN_COMMAND } from '../shared/product.ts'
 
 const CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36'
 const SAFARI = (v: string) => `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${v} Safari/605.1.15`
@@ -56,7 +57,7 @@ describe('installable app', () => {
       return new Response('dashboard')
     })
     expect(handle('cors')).toBeNull()
-    expect(await (await handle('navigate'))?.text()).toContain('npx wiener-tools-claude')
+    expect(await (await handle('navigate'))?.text()).toContain(RUN_COMMAND)
     up = true
     expect(await (await handle('navigate'))?.text()).toBe('dashboard')
   })

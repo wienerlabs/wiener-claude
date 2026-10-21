@@ -19,7 +19,7 @@
        call render(i / 30) and take a screenshot, up to window.DURATION seconds. The launch video
        used the "Çift işlenen iadeler" session and /Users/demo/code/carsi-web.
     4. ffmpeg -framerate 30 -i f%04d.jpg -vf "scale=in_range=pc:out_range=tv,format=yuv420p"
-       -c:v libx264 -crf 17 -preset slow -movflags +faststart wiener-tools-claude.mp4
+       -c:v libx264 -crf 17 -preset slow -movflags +faststart wiener-tools-lens.mp4
 -->
 <style>
   @font-face { font-family: 'Bricolage'; src: url(fonts/bricolage-grotesque-latin-wght-normal.woff2) format('woff2'); font-weight: 200 800; unicode-range: U+0000-00FF, U+0131, U+2000-206F; }
@@ -62,7 +62,7 @@
   <div id="end">
     <svg viewBox="0 0 607 424" height="76" fill="#eceef2" aria-hidden="true"><path fill-rule="evenodd" d="M2 0 122 1 122 279 127 291 134 298 148 303 221 302 233 296 233 294 238 290 242 281 243 1 363 1 365 281 370 292 372 292 377 298 386 302 485 304 485 424 364 424 253 312 248 316 243 328 242 424 121 424 117 421 11 315 4 304 1 295 0 2Z M487 0 605 0 607 2 607 177 601 189 545 243 488 243 486 241 486 183 533 182 541 178 546 169 546 122 487 122 485 119Z"/></svg>
     <h2>Wiener Lens</h2>
-    <div class="cmd">npx wiener-tools-claude</div>
+    <div class="cmd">npx wiener-tools-lens</div>
     <div class="url">lens.wienerlabs.xyz</div>
     <div class="note">Yerel çalışır. Veri göndermez.</div>
   </div>

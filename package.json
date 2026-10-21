@@ -1,5 +1,5 @@
 {
-  "name": "wiener-tools-claude",
+  "name": "wiener-tools-lens",
   "version": "0.8.0",
   "description": "A local dashboard for your Claude Code usage: heatmaps, session transcripts, cost and limits, tools and evidence-based tips. Your data never leaves your machine.",
   "license": "MIT",
@@ -26,7 +26,7 @@
   ],
   "type": "module",
   "bin": {
-    "wiener-tools-claude": "bin/wiener.js"
+    "wiener-tools-lens": "bin/wiener.js"
   },
   "files": [
     "bin",
