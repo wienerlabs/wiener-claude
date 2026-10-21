@@ -11,7 +11,7 @@ cost and limits, tool usage and evidence-based tips.
 [![License: MIT](https://img.shields.io/badge/license-MIT-1c5cab)](LICENSE)
 [![Node.js 22.13+](https://img.shields.io/badge/node-%E2%89%A5%2022.13-1c5cab)](https://nodejs.org)
 
-**[Live demo](https://claude.wienerlabs.xyz/?lang=en)** · [Install](#install) · [Features](#features) · [Privacy](#privacy-and-security)
+**[Live demo](https://lens.wienerlabs.xyz/?lang=en)** · [Install](#install) · [Features](#features) · [Privacy](#privacy-and-security)
 
 </div>
 
@@ -172,7 +172,7 @@ The desktop session folder path is verified only on macOS; the Windows and Linux
 
 ## Live demo
 
-[claude.wienerlabs.xyz](https://claude.wienerlabs.xyz/?lang=en) shows the dashboard itself with made-up data. The dashboard reads the `~/.claude` folder of the computer it runs on, so it can't run on a server as is; the demo is a static site instead:
+[lens.wienerlabs.xyz](https://lens.wienerlabs.xyz/?lang=en) shows the dashboard itself with made-up data. The dashboard reads the `~/.claude` folder of the computer it runs on, so it can't run on a server as is; the demo is a static site instead:
 
 1. `scripts/demo/generate.ts` creates transcripts spread over the last six months for six made-up projects, plus memory, skill, MCP and settings files. It runs with a fixed seed and reads nothing from a real machine.
 2. `scripts/demo/build.ts` indexes this fake home folder with the real server code and writes every API response the interface can ask for as a static file. The build stops if a path from the build machine is left in the output.

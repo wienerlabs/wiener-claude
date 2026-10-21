@@ -7,7 +7,7 @@ const OFFLINE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Wiener Lens</title>
+<title>Wiener Tools</title>
 <style>
 :root{--bg:#f4f5f7;--surface:#fff;--ink:#15171c;--ink-2:#565b66;--line:#e3e5ea}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#111316;--surface:#181b20;--ink:#eceef2;--ink-2:#a7adb8;--line:#262a31}}
@@ -23,7 +23,7 @@ code{display:inline-block;padding:9px 14px;border:1px solid var(--line);border-r
 <body>
 <main>
 <svg viewBox="0 0 607 424" aria-hidden="true"><path fill-rule="evenodd" d="${MARK}"/></svg>
-<h1 data-en="Wiener Lens is not running">Wiener Lens çalışmıyor</h1>
+<h1 data-en="Wiener Tools is not running">Wiener Tools çalışmıyor</h1>
 <p data-en="Run this in a terminal to start it. This window reloads by itself once the dashboard is up.">Başlatmak için terminalde şunu çalıştır. Panel açılınca bu pencere kendiliğinden yenilenir.</p>
 <code>npx wiener-tools-claude</code>
 </main>

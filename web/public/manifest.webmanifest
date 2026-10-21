@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Wiener Lens",
-  "short_name": "Wiener Lens",
+  "name": "Wiener Tools for Claude Code",
+  "short_name": "Wiener Tools",
   "description": "Claude Code kullanımını kendi bilgisayarında gösteren sade bir panel. Yerel çalışır, veri göndermez.",
   "lang": "tr",
   "start_url": "/",
