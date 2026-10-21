@@ -114,7 +114,13 @@ async function main(): Promise<void> {
   const allowedHosts = lan ? null : new Set(['localhost', '127.0.0.1', '[::1]', opts.host])
   const app = createApp({ db, indexer, pricing, events, staticDir: findStaticDir(), allowedHosts, accountDb: accountScopes(db, dbFile) })
 
-  const server = createAdaptorServer({ fetch: app.fetch })
+  let pageWaiting = false
+  const server = createAdaptorServer({
+    fetch: (req, env) => {
+      pageWaiting = true
+      return app.fetch(req, env)
+    },
+  })
   const port = await new Promise<number>((resolve, reject) => {
     let attempt = opts.port
     server.on('error', (err: NodeJS.ErrnoException) => {
@@ -156,7 +162,11 @@ async function main(): Promise<void> {
   watch(liveSessionsDir(), () => events.emit('live'))
   setInterval(rescan, 60_000).unref()
 
-  if (opts.open) openBrowser(opts.lang ? `${url}/?lang=${opts.lang}` : url)
+  if (opts.open) {
+    setTimeout(() => {
+      if (!pageWaiting) openBrowser(opts.lang ? `${url}/?lang=${opts.lang}` : url)
+    }, 1500)
+  }
 
   const shutdown = () => {
     server.close()
