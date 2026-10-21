@@ -420,6 +420,13 @@ export interface Settings {
   monthlyBudget: number | null
 }
 
+export interface Account {
+  id: string
+  kind: 'account' | 'unknown'
+  label: string
+  sessions: number
+}
+
 export type MemoryType = 'user' | 'feedback' | 'project' | 'reference' | 'index' | 'other'
 
 export interface MemoryFile {

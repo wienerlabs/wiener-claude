@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ReplayItem, ReplayPage, ReplayTurn, SessionRow } from '../../../shared/types.ts'
 import { ErrorNote, Skeleton, cx } from '../components/ui.tsx'
-import { getJson, useDataVersion } from '../lib/api.ts'
+import { getJson, useAccount, useDataVersion } from '../lib/api.ts'
 import { fmtCompact, fmtCount, fmtDateTime, fmtDuration, fmtInt, fmtTime, fmtUsd, modelName } from '../lib/format.ts'
 import { tx } from '../lib/i18n.ts'
 
@@ -29,7 +29,8 @@ const empty = (key: string): ReplayState => ({ key, session: null, start: 0, tur
  * When the index updates, the last loaded page is fetched again so a running session grows in place.
  */
 function useReplay(id: string, focusKey: string | null) {
-  const key = `${id}|${focusKey ?? ''}`
+  const [account] = useAccount()
+  const key = `${account ?? ''}|${id}|${focusKey ?? ''}`
   const version = useDataVersion()
   const [state, setState] = useState<ReplayState>(() => empty(key))
   const [busy, setBusy] = useState(false)
