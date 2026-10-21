@@ -103,8 +103,8 @@ export function heatmap(db: Db, view: HeatmapView, metric: Metric, from: string,
 }
 
 function messagesOn(db: Db, from: string, to: string): number {
-  const r = one(db, `SELECT (SELECT count(*) FROM prompts WHERE day BETWEEN ?1 AND ?2)
-    + (SELECT count(*) FROM api_calls WHERE is_sidechain = 0 AND day BETWEEN ?1 AND ?2) AS c`, from, to)
+  const r = db.prepare(`SELECT (SELECT count(*) FROM prompts WHERE day BETWEEN $from AND $to)
+    + (SELECT count(*) FROM api_calls WHERE is_sidechain = 0 AND day BETWEEN $from AND $to) AS c`).get({ $from: from, $to: to }) as Row | undefined
   return n(r?.c)
 }
 
@@ -159,17 +159,17 @@ export function summary(db: Db, live: Summary['live']): Summary {
 const TITLE = `COALESCE(NULLIF(s.custom_title, ''), NULLIF(d.title, ''), NULLIF(s.ai_title, ''), NULLIF(s.first_prompt, ''), 'Adsız oturum')`
 
 export function day(db: Db, dayKey: string): DayDetail {
-  const rows = all(db, `
+  const rows = db.prepare(`
     WITH f AS (
-      SELECT session_id, ts, 1 AS msg, 0 AS cost, 0 AS err FROM prompts WHERE day = ?1
-      UNION ALL SELECT session_id, ts, 1 - is_sidechain, COALESCE(cost, 0), 0 FROM api_calls WHERE day = ?1
-      UNION ALL SELECT session_id, ts, 0, 0, 1 FROM tool_uses WHERE day = ?1 AND is_error = 1 AND denied IS NULL
-      UNION ALL SELECT session_id, ts, 0, 0, 1 FROM events WHERE day = ?1 AND kind = 'api_error'
+      SELECT session_id, ts, 1 AS msg, 0 AS cost, 0 AS err FROM prompts WHERE day = $day
+      UNION ALL SELECT session_id, ts, 1 - is_sidechain, COALESCE(cost, 0), 0 FROM api_calls WHERE day = $day
+      UNION ALL SELECT session_id, ts, 0, 0, 1 FROM tool_uses WHERE day = $day AND is_error = 1 AND denied IS NULL
+      UNION ALL SELECT session_id, ts, 0, 0, 1 FROM events WHERE day = $day AND kind = 'api_error'
     )
     SELECT f.session_id AS id, ${TITLE} AS title, COALESCE(s.project_name, 'Bilinmeyen') AS project,
       min(f.ts) AS first_ts, max(f.ts) AS last_ts, sum(f.msg) AS messages, sum(f.cost) AS cost, sum(f.err) AS errors
     FROM f LEFT JOIN sessions s ON s.id = f.session_id LEFT JOIN desktop_sessions d ON d.cli_session_id = f.session_id
-    GROUP BY f.session_id ORDER BY first_ts`, dayKey)
+    GROUP BY f.session_id ORDER BY first_ts`).all({ $day: dayKey }) as Row[]
   const sessions = rows.map((r) => ({
     id: String(r.id), title: String(r.title), projectName: String(r.project),
     firstTs: n(r.first_ts), lastTs: n(r.last_ts), messages: n(r.messages), cost: n(r.cost), errors: n(r.errors),

@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { openDb } from '../server/db.ts'
 import { Indexer } from '../server/indexer.ts'
@@ -141,6 +142,10 @@ describe('queries', () => {
     expect(cal.cells).toEqual([{ key: '2026-10-05', value: 4 }])
     expect(q.heatmap(db, 'calendar', 'sessions', '2026-10-01', '2026-10-31').total).toBe(2)
     expect(q.heatmap(db, 'calendar', 'errors', '2026-10-01', '2026-10-31').total).toBe(1)
+    expect(q.day(db, '2026-10-05')).toMatchObject({
+      messages: 4,
+      sessions: [{ id: 's1', messages: 3, errors: 1 }, { id: 's2', messages: 1, errors: 0 }],
+    })
 
     const wh = q.heatmap(db, 'weekhour', 'messages', '2026-10-01', '2026-10-31')
     expect(Object.fromEntries(wh.cells.map((c) => [c.key, c.value]))).toEqual({ '0:9': 2, '0:14': 2 })
@@ -176,6 +181,13 @@ describe('queries', () => {
     await indexer.scan()
     expect(q.sessions(db, { q: 'webhook' }).rows.map((r) => r.id)).toEqual(['s1'])
     expect(q.sessions(db, { q: '100%' }).rows).toEqual([])
+  })
+
+  it('uses no numbered ?NNN parameters, which node:sqlite before Node 22.20 and 24.7 cannot bind by position', () => {
+    const server = new URL('../server/', import.meta.url)
+    const numbered = fs.readdirSync(server, { recursive: true }).map(String)
+      .filter((f) => f.endsWith('.ts') && /\?\d/.test(fs.readFileSync(new URL(f, server), 'utf8')))
+    expect(numbered).toEqual([])
   })
 })
 

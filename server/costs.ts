@@ -106,9 +106,9 @@ export function limits(db: Db, account: AccountInfo | null, now = Date.now()): L
   const window = currentBlock(ts, now)
   let block: Limits['block'] = null
   if (window) {
-    const r = db.prepare(`SELECT (SELECT COALESCE(sum(cost), 0) FROM api_calls WHERE ts >= ?1) AS cost,
-        (SELECT count(*) FROM prompts WHERE ts >= ?1) + (SELECT count(*) FROM api_calls WHERE ts >= ?1 AND is_sidechain = 0) AS messages`)
-      .get(window.start) as Row
+    const r = db.prepare(`SELECT (SELECT COALESCE(sum(cost), 0) FROM api_calls WHERE ts >= $start) AS cost,
+        (SELECT count(*) FROM prompts WHERE ts >= $start) + (SELECT count(*) FROM api_calls WHERE ts >= $start AND is_sidechain = 0) AS messages`)
+      .get({ $start: window.start }) as Row
     block = { ...window, cost: n(r.cost), messages: n(r.messages) }
   }
 

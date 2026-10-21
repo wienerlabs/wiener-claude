@@ -56,14 +56,14 @@ export function projectList(db: Db, rangeKey: RangeKey = 'all'): ProjectSummary[
   )
   const messages = new Map(
     (db.prepare(`SELECT s.project_key AS key, count(*) AS c FROM (
-        SELECT session_id FROM prompts WHERE day BETWEEN ?1 AND ?2
-        UNION ALL SELECT session_id FROM api_calls WHERE is_sidechain = 0 AND day BETWEEN ?1 AND ?2
-      ) f JOIN sessions s ON s.id = f.session_id GROUP BY s.project_key`).all(range.from, range.to) as Row[]).map((r) => [String(r.key), n(r.c)]),
+        SELECT session_id FROM prompts WHERE day BETWEEN $from AND $to
+        UNION ALL SELECT session_id FROM api_calls WHERE is_sidechain = 0 AND day BETWEEN $from AND $to
+      ) f JOIN sessions s ON s.id = f.session_id GROUP BY s.project_key`).all({ $from: range.from, $to: range.to }) as Row[]).map((r) => [String(r.key), n(r.c)]),
   )
   const daily = db.prepare(`SELECT s.project_key AS key, f.day AS day, count(*) AS c FROM (
-      SELECT session_id, day FROM prompts WHERE day >= ?1
-      UNION ALL SELECT session_id, day FROM api_calls WHERE is_sidechain = 0 AND day >= ?1
-    ) f JOIN sessions s ON s.id = f.session_id GROUP BY s.project_key, f.day`).all(stripFrom) as Row[]
+      SELECT session_id, day FROM prompts WHERE day >= $from
+      UNION ALL SELECT session_id, day FROM api_calls WHERE is_sidechain = 0 AND day >= $from
+    ) f JOIN sessions s ON s.id = f.session_id GROUP BY s.project_key, f.day`).all({ $from: stripFrom }) as Row[]
   const editRows = new Map<string, { path: string; lines: number; edits: number }[]>()
   for (const r of db.prepare(`SELECT s.project_key AS key, f.path AS path, sum(f.added + f.removed) AS lines, count(*) AS edits
       FROM file_edits f JOIN sessions s ON s.id = f.session_id WHERE f.day BETWEEN ? AND ? GROUP BY s.project_key, f.path`)
