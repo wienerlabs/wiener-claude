@@ -8,7 +8,13 @@
     {
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "wiener-claude.vercel.app" }],
-      "destination": "https://claude.wienerlabs.xyz/$1",
+      "destination": "https://lens.wienerlabs.xyz/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "claude.wienerlabs.xyz" }],
+      "destination": "https://lens.wienerlabs.xyz/$1",
       "permanent": true
     }
   ],
