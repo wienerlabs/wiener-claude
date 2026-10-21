@@ -1,6 +1,26 @@
 import fs from 'node:fs'
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
+import { installWay } from '../web/src/lib/install.ts'
+
+const CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36'
+const SAFARI = (v: string) => `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${v} Safari/605.1.15`
+const FIREFOX = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0'
+const ELECTRON = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/1.0.0 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36'
+
+describe('install button', () => {
+  it('shows in browsers that can install, before they offer it', () => {
+    expect(installWay(CHROME, true)).toBe('browser')
+    expect(installWay(SAFARI('17.6'), false)).toBe('safari')
+    expect(installWay(SAFARI('26.0'), false)).toBe('safari')
+  })
+
+  it('stays hidden where there is nothing to install with', () => {
+    expect(installWay(SAFARI('16.6'), false)).toBeNull()
+    expect(installWay(FIREFOX, false)).toBeNull()
+    expect(installWay(ELECTRON, true)).toBeNull()
+  })
+})
 
 type Icon = { src: string; sizes: string }
 type FetchEvent = { request: { mode: string }; respondWith: (answer: Promise<Response>) => void }

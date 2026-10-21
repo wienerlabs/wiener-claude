@@ -144,6 +144,18 @@ body {
   outline-color: var(--ink);
 }
 
+@supports (position-area: right) {
+  .install-anchor {
+    anchor-name: --install;
+  }
+  .install-help {
+    position-anchor: --install;
+    position-area: right span-top;
+    inset: auto;
+    margin: 0 0 0 2.5rem;
+  }
+}
+
 /* Markdown written by Claude in the replay. */
 .md {
   overflow-wrap: anywhere;
