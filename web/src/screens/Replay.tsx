@@ -125,10 +125,15 @@ export function Replay({ id, focusKey = null }: { id: string; focusKey?: string 
       {missing ? (
         <p className="flex gap-2 rounded-lg border border-line bg-raised px-4 py-3 text-[13px] text-ink-2">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {tx(
-            "Bu oturumun dökümü artık diskte yok. Claude Code eski dökümleri bir süre sonra siler; yukarıdaki sayılar Wiener Tools'un indeksinden geliyor.",
-            "This session's transcript is no longer on disk. Claude Code deletes old transcripts after a while, so the numbers above come from the Wiener Tools index.",
-          )}
+          {session.historyOnly
+            ? tx(
+                "Claude Code bu oturumun dökümünü silmiş. Aşağıdaki prompt'lar ~/.claude/history.jsonl dosyasından geliyor; yanıtlar, araç çağrıları ve maliyet bu yüzden görünmüyor.",
+                "Claude Code deleted this session's transcript. The prompts below come from ~/.claude/history.jsonl, so replies, tool calls and cost are not available.",
+              )
+            : tx(
+                "Bu oturumun dökümü artık diskte yok. Claude Code eski dökümleri bir süre sonra siler; yukarıdaki sayılar Wiener Tools'un indeksinden geliyor.",
+                "This session's transcript is no longer on disk. Claude Code deletes old transcripts after a while, so the numbers above come from the Wiener Tools index.",
+              )}
         </p>
       ) : null}
       {!missing && total === 0 ? <p className="text-ink-2">{tx('Bu oturumda henüz bir prompt yok.', 'No prompts in this session yet.')}</p> : null}
@@ -199,20 +204,28 @@ function Header({ s }: { s: SessionRow }) {
         <Stat label={tx('Mesaj', 'Messages')} value={fmtInt(s.messages)} note={fmtCount(s.prompts, 'prompt', 'prompt')} />
         <Stat
           label={tx('Araç çağrısı', 'Tool calls')}
-          value={fmtInt(s.toolCalls)}
-          note={s.toolErrors ? <span className="text-danger">{fmtCount(s.toolErrors, 'hata', 'error')}</span> : tx('hatasız', 'no errors')}
+          value={s.historyOnly ? tx('Bilinmiyor', 'Unknown') : fmtInt(s.toolCalls)}
+          note={
+            s.historyOnly
+              ? tx('döküm silinmiş', 'transcript deleted')
+              : s.toolErrors
+                ? <span className="text-danger">{fmtCount(s.toolErrors, 'hata', 'error')}</span>
+                : tx('hatasız', 'no errors')
+          }
         />
         <Stat
           label={tx('Maliyet', 'Cost')}
-          value={fmtUsd(s.costEstimate + hidden)}
+          value={s.historyOnly ? tx('Bilinmiyor', 'Unknown') : fmtUsd(s.costEstimate + hidden)}
           note={
-            hidden
-              ? tx(`${fmtUsd(s.costEstimate)} dökümde + ${fmtUsd(hidden)} kayıtsız`, `${fmtUsd(s.costEstimate)} in transcript + ${fmtUsd(hidden)} unrecorded`)
-              : tx('tahmini liste fiyatı', 'estimated at list price')
+            s.historyOnly
+              ? tx('döküm silinmiş', 'transcript deleted')
+              : hidden
+                ? tx(`${fmtUsd(s.costEstimate)} dökümde + ${fmtUsd(hidden)} kayıtsız`, `${fmtUsd(s.costEstimate)} in transcript + ${fmtUsd(hidden)} unrecorded`)
+                : tx('tahmini liste fiyatı', 'estimated at list price')
           }
         />
       </dl>
-      {s.linesAdded !== null ? (
+      {!s.historyOnly && s.linesAdded !== null ? (
         <p className="font-mono text-[12px] text-ink-2 num">
           <span className="text-good">+{fmtInt(s.linesAdded)}</span> <span className="text-danger">−{fmtInt(s.linesRemoved ?? 0)}</span> {tx('satır', 'lines')}
         </p>

@@ -45,6 +45,8 @@ Bir yıllık takvim, haftanın günü × saat ve proje × gün ısı haritaları
 
 Her oturumun tur tur dökümü: prompt'lar, yanıtlar, araç çağrıları ve sonuçları, hatalar, compact'ler. Tam metin arama bütün prompt'larda, yanıtlarda ve shell komutlarında çalışır; Türkçe karakter olmadan yazılan aramayı da bulur ("degisiklik" → "değişiklik"). Bir sonuca tıklamak dökümü o mesajda açar. Oturum sayfası Claude Code'un kendi maliyet sayacını dökümle karşılaştırır ve aradaki farkı ayrıca gösterir.
 
+Claude Code terminal dökümlerini 30 gün dokunulmadıktan sonra siler (`cleanupPeriodDays`). Panel bu oturumları da gösterir: yazdığın prompt'lar `~/.claude/history.jsonl` dosyasından gelir, oturum "yalnızca prompt geçmişi" olarak işaretlenir ve bunlarda yanıt, araç çağrısı ya da maliyet bulunmaz. Cowork oturumları da başlıkları ve hesaplarıyla listede yer alır.
+
 ### İpuçları
 
 <img alt="İpuçları: aradan sonra yeniden yazılan cache ve context şişmesi, dayandıkları oturumlarla" src="https://raw.githubusercontent.com/wienerlabs/wiener-claude/main/docs/images/tips.png" />
@@ -142,6 +144,8 @@ Fiyat tablosunu `~/.wiener-tools/claude/pricing.json` ile ezebilirsin (MTok baş
 | `~/.claude/projects/<proje>/<oturum>.jsonl` | Mesajlar, token kullanımı, araç çağrıları, başlıklar, PR bağlantıları |
 | `~/.claude/projects/<proje>/<oturum>/subagents/**` | Subagent dökümleri; maliyetleri ana oturuma yazılır |
 | `~/Library/Application Support/Claude/claude-code-sessions` | Desktop oturumlarının başlığı, branch'i, worktree'si ve hangi hesaba ait olduğu |
+| `~/Library/Application Support/Claude/local-agent-mode-sessions` | Cowork oturumlarının dökümleri, başlıkları ve hangi hesaba ait oldukları |
+| `~/.claude/history.jsonl` | Dökümü silinmiş terminal oturumlarının prompt'ları: zaman, proje ve metin |
 | `~/.claude/sessions/*.json` | Şu an çalışan Claude Code süreçleri |
 | `~/.claude.json` | Plan adı, son limit ölçümü, skill ve plugin kullanım sayıları, MCP sunucularının adı ve türü |
 | `~/.claude.json`, `~/.claude.json.backup` | Hesap seçici için hesap kimliği ve e-postanın kısaltması |

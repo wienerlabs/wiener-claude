@@ -15,6 +15,15 @@ export function liveSessionsDir(): string {
   return path.join(claudeDir(), 'sessions')
 }
 
+export function historyFile(): string {
+  return path.join(claudeDir(), 'history.jsonl')
+}
+
+export function coworkSessionsDir(): string | null {
+  const desktop = desktopSessionsDir()
+  return desktop ? path.join(path.dirname(desktop), 'local-agent-mode-sessions') : null
+}
+
 /**
  * Session metadata written by the Claude desktop app (title, branch, worktree, archive state).
  * Only the macOS location has been verified; the others follow Electron's userData conventions.
