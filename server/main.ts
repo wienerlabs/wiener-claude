@@ -14,7 +14,7 @@ import { coworkSessionsDir, dataDir, desktopSessionsDir, historyFile, liveSessio
 import { Pricing } from './pricing.ts'
 import { installStatusLine } from './statusline.ts'
 
-const VERSION = '0.8.0'
+const VERSION = '0.9.0'
 const LANG = terminalLang()
 const L = (tr: string, en: string) => pick(LANG, tr, en)
 

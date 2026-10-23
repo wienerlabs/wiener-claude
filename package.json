@@ -1,6 +1,6 @@
 {
   "name": "wiener-tools-lens",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A local dashboard for your Claude Code usage: heatmaps, session transcripts, cost and limits, tools and evidence-based tips. Your data never leaves your machine.",
   "license": "MIT",
   "author": "Wiener Labs",
