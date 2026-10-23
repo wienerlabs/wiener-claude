@@ -1,4 +1,4 @@
-import { Activity, Boxes, FolderGit2, LayoutGrid, Lightbulb, Monitor, MonitorDown, Moon, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
+import { Activity, Boxes, FolderGit2, Gauge, LayoutGrid, Lightbulb, Monitor, MonitorDown, Moon, Receipt, Sparkles, Sun, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Account, IndexStatus } from '../../shared/types.ts'
 import { CopyCommand, DemoBanner } from './components/DemoBanner.tsx'
@@ -13,6 +13,7 @@ import { installApp, useInstall } from './lib/install.ts'
 import { onLinkClick, useLocation } from './lib/router.ts'
 import { Costs } from './screens/Costs.tsx'
 import { Environment } from './screens/Environment.tsx'
+import { Limits } from './screens/Limits.tsx'
 import { Overview } from './screens/Overview.tsx'
 import { Projects } from './screens/Projects.tsx'
 import { Sessions } from './screens/Sessions.tsx'
@@ -27,6 +28,7 @@ const nav = () => [
   { to: '/projeler', label: tx('Projeler', 'Projects'), icon: FolderGit2, match: (p: string) => p.startsWith('/projeler') },
   { to: '/araclar', label: tx('Araçlar', 'Tools'), icon: Wrench, match: (p: string) => p.startsWith('/araclar') },
   { to: '/maliyet', label: tx('Maliyet', 'Cost'), icon: Receipt, match: (p: string) => p.startsWith('/maliyet') },
+  { to: '/limitler', label: tx('Limitler', 'Limits'), icon: Gauge, match: (p: string) => p.startsWith('/limitler') },
   { to: '/ipuclari', label: tx('İpuçları', 'Tips'), icon: Lightbulb, match: (p: string) => p.startsWith('/ipuclari') },
   { to: '/ortam', label: tx('Ortam', 'Environment'), icon: Boxes, match: (p: string) => p.startsWith('/ortam') },
   { to: '/yil-ozeti', label: tx('Yıl özeti', 'Year in review'), icon: Sparkles, match: (p: string) => p.startsWith('/yil-ozeti') },
@@ -94,6 +96,8 @@ export function App() {
             <Projects selectedKey={projectKey} />
           ) : path === '/maliyet' ? (
             <Costs />
+          ) : path === '/limitler' ? (
+            <Limits />
           ) : path === '/ortam' ? (
             <Environment />
           ) : path === '/ipuclari' ? (

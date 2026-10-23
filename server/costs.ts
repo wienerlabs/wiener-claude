@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { CostMix, CostReport, DailyCost, LimitHit, Limits, ModelCost, RangeKey } from '../shared/types.ts'
+import type { CostMix, CostReport, DailyCost, LimitForecast, LimitHit, Limits, ModelCost, RangeKey, WindowForecast } from '../shared/types.ts'
 import { type Lang, formatUsd, pick } from '../shared/i18n.ts'
 import type { Db } from './db.ts'
 import { type Pricing, normalizeModel } from './pricing.ts'
@@ -101,7 +101,9 @@ export function currentBlock(timestamps: number[], now: number): { start: number
   return start !== null && now < start + BLOCK ? { start, end: start + BLOCK } : null
 }
 
-export function limits(db: Db, account: AccountInfo | null, now = Date.now()): Limits {
+const NO_FORECAST: LimitForecast = { lastReadingAt: null, fiveHour: null, sevenDay: null }
+
+export function limits(db: Db, account: AccountInfo | null, now = Date.now(), forecast: LimitForecast = NO_FORECAST): Limits {
   const ts = (db.prepare('SELECT ts FROM api_calls WHERE ts >= ? ORDER BY ts').all(now - 2 * DAY) as { ts: number }[]).map((r) => r.ts)
   const window = currentBlock(ts, now)
   let block: Limits['block'] = null
@@ -119,7 +121,11 @@ export function limits(db: Db, account: AccountInfo | null, now = Date.now()): L
     n((db.prepare('SELECT COALESCE(sum(cost), 0) AS c FROM api_calls WHERE ts >= ? AND ts <= ?').get(from, to) as Row).c)
   const lastWeekly = hits.find((h) => h.kind === 'seven_day')
 
-  const usage = account?.usage ?? null
+  // The status line's reading comes after every response; it wins over Claude Code's occasional ones.
+  const live = (w: WindowForecast | null) => (w ? { percent: w.percent, resetsAt: w.resetsAt } : null)
+  const usage = forecast.lastReadingAt !== null && forecast.lastReadingAt > (account?.usage?.fetchedAt ?? 0) && (forecast.fiveHour || forecast.sevenDay)
+    ? { fetchedAt: forecast.lastReadingAt, fiveHour: live(forecast.fiveHour), sevenDay: live(forecast.sevenDay) }
+    : (account?.usage ?? null)
   const fresh = (w: { resetsAt: number | null } | null, span: number) =>
     !!usage && !!w && now - usage.fetchedAt < MEASURE_FRESH_MS && (w.resetsAt ?? usage.fetchedAt + span) > now
   return {
@@ -138,6 +144,7 @@ export function limits(db: Db, account: AccountInfo | null, now = Date.now()): L
       atLastWeeklyHit: lastWeekly ? { at: lastWeekly.at, cost: costSince(lastWeekly.at - 7 * DAY, lastWeekly.at) } : null,
     },
     hits,
+    forecast,
   }
 }
 
@@ -328,6 +335,5 @@ export function costReport(
     budget: monthlyBudget
       ? { monthly: monthlyBudget, crossesOn: budgetCrossing(monthDaily, monthlyBudget, monthCost, elapsedDays, mb.first, mb.daysInMonth) }
       : null,
-    limits: limits(db, account, now),
   }
 }

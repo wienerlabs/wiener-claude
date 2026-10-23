@@ -34,6 +34,37 @@ const PUBLIC_HOME = '/Users/demo'
 const RANGES = ['week', '30d', 'all'] as const
 const METRICS = ['messages', 'tokens', 'cost', 'sessions', 'errors'] as const
 
+const HOUR = 3_600_000
+
+/**
+ * What the Wiener Lens status line would have recorded today: a reading after every call of the
+ * current 5-hour window, rising with what the calls cost, up to the 34% and 52% the demo's account
+ * file shows. The forecast learns its "percent per dollar" from these, as it would on a real machine.
+ */
+function demoLimits(db: { prepare: (sql: string) => { all: (...a: number[]) => unknown[] } }, now: number): string {
+  const calls = db.prepare('SELECT ts, session_id AS s, cost FROM api_calls WHERE ts > ? AND ts <= ? ORDER BY ts').all(now - 7 * 24 * HOUR, now) as { ts: number; s: string; cost: number | null }[]
+  const first = calls.find((c) => c.ts > now - 5 * HOUR)
+  if (!first) return ''
+  const start = Math.floor(first.ts / HOUR) * HOUR
+  const recent = calls.filter((c) => c.ts >= start)
+  const windowCost = recent.reduce((t, c) => t + (c.cost ?? 0), 0)
+  const weekCost = calls.reduce((t, c) => t + (c.cost ?? 0), 0)
+  const weekBefore = weekCost - windowCost
+  let spent = 0
+  return recent
+    .map((c) => {
+      spent += c.cost ?? 0
+      const sample = {
+        t: c.ts + 2000, s: c.s,
+        fh: Math.round(((34 * spent) / windowCost) * 10) / 10, fr: Math.round((start + 5 * HOUR) / 1000),
+        sd: Math.round(((52 * (weekBefore + spent)) / weekCost) * 10) / 10, sr: Math.round((now + 3 * 24 * HOUR) / 1000),
+        c: null,
+      }
+      return `${JSON.stringify(sample)}\n`
+    })
+    .join('')
+}
+
 async function main(): Promise<void> {
   if (!fs.existsSync(path.join(OUT, 'index.html'))) throw new Error(`${OUT} içinde index.html yok; önce demo arayüzünü derle`)
 
@@ -82,6 +113,7 @@ async function main(): Promise<void> {
     const pricing = new Pricing()
     const indexer = new Indexer(db, pricing, { projectsDir: projectsDir(), desktopDir: null, historyFile: historyFile() })
     await indexer.scan()
+    fs.writeFileSync(path.join(process.env.WIENER_DATA_DIR, 'limits.jsonl'), demoLimits(db, now.getTime()))
     const app = createApp({ db, indexer, pricing, events: new EventEmitter(), staticDir: null, allowedHosts: null })
 
     const swaps = [home, fs.realpathSync(home)].flatMap((h) => [[h, PUBLIC_HOME], [slug(h), slug(PUBLIC_HOME)]])
@@ -100,7 +132,7 @@ async function main(): Promise<void> {
       return JSON.parse(text) as T
     }
 
-    for (const url of ['/api/status', '/api/summary', '/api/insights', '/api/settings']) await snap(url)
+    for (const url of ['/api/status', '/api/summary', '/api/insights', '/api/settings', '/api/limits']) await snap(url)
     const env = await snap<{ memory: { id: string }[]; instructions: { id: string }[] }>('/api/env')
     for (const f of [...env.memory, ...env.instructions]) await snap(`/api/env/file/${f.id}`)
 

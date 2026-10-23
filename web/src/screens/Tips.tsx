@@ -123,7 +123,7 @@ function TipCard({ tip }: { tip: Tip }) {
   )
 }
 
-function Snippet({ label, code }: { label: string; code: string }) {
+export function Snippet({ label, code }: { label: string; code: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {

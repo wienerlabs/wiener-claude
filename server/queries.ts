@@ -382,7 +382,7 @@ export function insights(db: Db, monthlyBudget: number | null = null, lang: Lang
       `the ${h.kind === 'seven_day' ? 'weekly' : h.kind === 'five_hour' ? '5-hour' : 'usage'} limit ${times(n(h.c))}`,
     ))
     .join(L(', ', ' and '))
-  if (hitText) add(1, { tone: 'warn', href: '/maliyet', text: L(`Bu hafta ${hitText} takıldın.`, `This week you hit ${hitText}.`) })
+  if (hitText) add(1, { tone: 'warn', href: '/limitler', text: L(`Bu hafta ${hitText} takıldın.`, `This week you hit ${hitText}.`) })
 
   const byProject = all(db, `SELECT COALESCE(s.project_name, 'Bilinmeyen') AS name, sum(a.cost) AS cost
     FROM api_calls a LEFT JOIN sessions s ON s.id = a.session_id WHERE a.day BETWEEN ? AND ?
