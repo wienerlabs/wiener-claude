@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { type Lang, pick } from '../../shared/i18n.ts'
 import { Pricing } from '../../server/pricing.ts'
+import { EARLY } from './history.ts'
 import { CLAUDE_MD_WEB_EN, ROUTINE_PR_EN, ROUTINE_TESTS_EN, STORIES_EN } from './stories.en.ts'
 import { CLAUDE_MD_WEB, type Edit, type ProjectStories, type Question, ROUTINE_PR, ROUTINE_TESTS, STORIES, type Story } from './stories.ts'
 
@@ -494,6 +495,30 @@ export function generateDemoHome({ home, now, seed = 20261021, lang = 'tr' }: De
   if (now.getTime() - workStart > 90 * MIN) {
     today.forEach((w, i) => session(w, new Date(Math.max(workStart, now.getTime() - (95 - i * 35) * MIN)), { live: true }))
   }
+
+  // ---- the months before: prompt history only -------------------------------------------------------
+  // Claude Code deletes terminal transcripts after 30 days; ~/.claude/history.jsonl keeps the
+  // prompts. The year before the stories exists only there, sparse at first, as usage grew. Its own
+  // random sequence, so the sessions above stay the same whatever is added here.
+  const hr = rng(seed + 1)
+  const historyId = () => {
+    const h = () => Math.floor(hr.next() * 0x10000).toString(16).padStart(4, '0')
+    return `${h()}${h()}-${h()}-4${h().slice(1)}-a${h().slice(1)}-${h()}${h()}${h()}`
+  }
+  const history: Json[] = []
+  EARLY.forEach((e, i) => {
+    // Oldest first, over the eleven months before the stories begin.
+    const back = span + 6 + Math.floor(((EARLY.length - 1 - i + hr.next() * 0.7) / EARLY.length) * 190)
+    let day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back, hr.pick([10, 11, 14, 15, 16, 21]), hr.int(0, 59))
+    while (day.getDay() === 0 || day.getDay() === 6) day = new Date(day.getTime() + DAY)
+    let at = day.getTime()
+    const sessionId = historyId()
+    for (const [tr, en] of e.prompts) {
+      history.push({ display: L(tr, en), pastedContents: {}, timestamp: at, project: root(e.project), sessionId })
+      at += hr.int(4, 28) * MIN
+    }
+  })
+  write(path.join(claude, 'history.jsonl'), `${history.map((x) => JSON.stringify(x)).join('\n')}\n`)
 
   // ---- what lives around the transcripts ----------------------------------------------------------
   write(path.join(claude, 'CLAUDE.md'), L([

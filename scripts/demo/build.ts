@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const { Indexer } = await import('../../server/indexer.ts')
   const { Pricing } = await import('../../server/pricing.ts')
   const { createApp } = await import('../../server/api.ts')
-  const { projectsDir } = await import('../../server/paths.ts')
+  const { historyFile, projectsDir } = await import('../../server/paths.ts')
 
   const outDir = path.join(OUT, 'demo-api')
   fs.rmSync(outDir, { recursive: true, force: true })
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
 
     const db = openDb(':memory:')
     const pricing = new Pricing()
-    const indexer = new Indexer(db, pricing, { projectsDir: projectsDir(), desktopDir: null })
+    const indexer = new Indexer(db, pricing, { projectsDir: projectsDir(), desktopDir: null, historyFile: historyFile() })
     await indexer.scan()
     const app = createApp({ db, indexer, pricing, events: new EventEmitter(), staticDir: null, allowedHosts: null })
 

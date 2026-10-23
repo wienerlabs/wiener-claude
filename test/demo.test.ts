@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateDemoHome } from '../scripts/demo/generate.ts'
+import { EARLY } from '../scripts/demo/history.ts'
 import { openDb } from '../server/db.ts'
 import { Indexer } from '../server/indexer.ts'
 import { Pricing } from '../server/pricing.ts'
@@ -53,7 +54,7 @@ describe('demo data in English', () => {
       const home = fs.mkdtempSync(path.join(os.tmpdir(), 'wiener-demo-test-'))
       generateDemoHome({ home, now, lang })
       const db = openDb(':memory:')
-      await new Indexer(db, new Pricing(), { projectsDir: path.join(home, '.claude', 'projects'), desktopDir: null }).scan()
+      await new Indexer(db, new Pricing(), { projectsDir: path.join(home, '.claude', 'projects'), desktopDir: null, historyFile: path.join(home, '.claude', 'history.jsonl') }).scan()
       fs.rmSync(home, { recursive: true, force: true })
       return q.sessions(db, { range: 'all', limit: 200 }).rows
     }
@@ -61,6 +62,8 @@ describe('demo data in English', () => {
     const en = await index('en')
     const shape = (rows: typeof tr) => rows.map((r) => ({ id: r.id, project: r.projectName, start: r.firstTs, end: r.lastTs, messages: r.messages, cost: r.costEstimate, added: r.linesAdded }))
     expect(shape(en)).toEqual(shape(tr))
+    // The year before the stories survives only as prompt history.
+    expect(en.filter((r) => r.historyOnly)).toHaveLength(EARLY.length)
     expect(en.map((r) => r.title)).not.toEqual(tr.map((r) => r.title))
     for (const r of en) expect(r.title).not.toMatch(/[çğıöşüÇĞİÖŞÜ]/)
   })

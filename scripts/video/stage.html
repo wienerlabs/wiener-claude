@@ -4,22 +4,25 @@
 <meta charset="utf-8" />
 <title>Wiener Lens · video sahnesi</title>
 <!--
-  A 1080×1350 stage for the launch video. The demo's screens sit in iframes; render(t) places the
-  camera, the captions and the end card for time t in seconds, so frames can be captured one by
-  one at any rate. Nothing here animates by itself.
+  A 1080×1350 stage for the launch video. The dashboard sits in an app window, as it looks once
+  installed; each screen is an iframe at the window's own size. render(t) places the camera, the
+  captions and the end card for time t in seconds, so frames can be captured one by one at any
+  rate. Nothing here animates by itself.
 
   To render:
     1. DEMO_NOW=2026-10-21T16:20:00+03:00 npm run build:demo
-    2. Copy this file to dist/demo-site/video/, and the Bricolage and IBM Plex woff2 files it
-       names to dist/demo-site/video/fonts/; serve dist/demo-site (npx vite preview).
-    3. In a headless browser at 1080×1350, with Date shifted to the same moment and
-       localStorage "wiener-theme" set to "dark" before any page loads, open
-       /video/stage.html?oturum=<session id>&proje=<project key>, wait for window.stageReady,
-       then for each frame i
-       call render(i / 30) and take a screenshot, up to window.DURATION seconds. The launch video
-       used the "Çift işlenen iadeler" session and /Users/demo/code/carsi-web.
+    2. Copy this file and web/public/icon-512.png to dist/demo-site/video/, and the Bricolage and
+       IBM Plex woff2 files it names to dist/demo-site/video/fonts/; serve dist/demo-site
+       (npx vite preview).
+    3. In a headless browser at 1080×1350, with Date shifted to the same moment and localStorage
+       "wiener-theme" set to "dark" and "wiener-lang" to "tr" before any page loads, open
+       /video/stage.html?oturum=<session id>&gecmis=<history-only session id>&proje=<project key>,
+       wait for window.stageReady, then for each frame i call render(i / 30) and take a
+       screenshot, up to window.DURATION seconds. The launch video used the "Çift işlenen iadeler"
+       session, the history-only "Ödeme sayfasının ilk sürümünü yap" session and
+       /Users/demo/code/carsi-web.
     4. ffmpeg -framerate 30 -i f%04d.jpg -vf "scale=in_range=pc:out_range=tv,format=yuv420p"
-       -c:v libx264 -crf 17 -preset slow -movflags +faststart wiener-tools-lens.mp4
+       -c:v libx264 -crf 17 -preset slow -movflags +faststart wiener-lens.mp4
 -->
 <style>
   @font-face { font-family: 'Bricolage'; src: url(fonts/bricolage-grotesque-latin-wght-normal.woff2) format('woff2'); font-weight: 200 800; unicode-range: U+0000-00FF, U+0131, U+2000-206F; }
@@ -33,13 +36,19 @@
   .caption em { font-style: normal; color: #6da7ec; }
   #hook { top: 0; bottom: 0; display: flex; align-items: center; font-size: 82px; line-height: 1.04; letter-spacing: -2.6px; }
   #top { top: 104px; font-size: 62px; line-height: 1.08; }
-  #window { position: absolute; left: 80px; top: 360px; width: 920px; height: 860px; border-radius: 28px; overflow: hidden; border: 1px solid #262a31; background: #111316; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.5); }
-  #window iframe { position: absolute; left: 0; top: 0; width: 1440px; height: 2400px; border: 0; transform-origin: 0 0; }
+  /* The installed app's window: a title bar, then the dashboard at the window's size. */
+  #window { position: absolute; left: 60px; top: 318px; width: 960px; height: 900px; border-radius: 22px; overflow: hidden; border: 1px solid #2a2e35; background: #111316; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55); }
+  #titlebar { position: absolute; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; justify-content: center; background: #16191d; border-bottom: 1px solid #23272d; font: 500 14px/1 -apple-system, system-ui, sans-serif; color: #9aa0aa; }
+  #titlebar .lights { position: absolute; left: 16px; top: 14px; display: flex; gap: 8px; }
+  #titlebar .lights i { width: 12px; height: 12px; border-radius: 50%; }
+  #view { position: absolute; left: 0; top: 40px; width: 960px; height: 860px; overflow: hidden; }
+  #view iframe { position: absolute; left: 0; top: 0; width: 1280px; height: 1147px; border: 0; transform-origin: 0 0; }
   #brand { position: absolute; left: 84px; bottom: 58px; display: flex; align-items: center; gap: 12px; font-family: 'Bricolage'; font-weight: 600; font-size: 24px; color: #a7adb8; }
-  #brand svg, #end svg { width: auto; }
+  #brand svg { width: auto; }
   #end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-  #end h2 { margin-top: 36px; font-family: 'Bricolage'; font-weight: 600; font-size: 64px; line-height: 1.06; letter-spacing: -2px; }
-  #end .cmd { margin-top: 56px; font-family: 'PlexMono'; font-size: 34px; padding: 20px 30px; border: 1px solid #2c313a; border-radius: 18px; background: #181b20; }
+  #end img { width: 148px; height: 148px; border-radius: 34px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
+  #end h2 { margin-top: 40px; font-family: 'Bricolage'; font-weight: 600; font-size: 64px; line-height: 1.06; letter-spacing: -2px; }
+  #end .cmd { margin-top: 52px; font-family: 'PlexMono'; font-size: 34px; padding: 20px 30px; border: 1px solid #2c313a; border-radius: 18px; background: #181b20; }
   #end .url { margin-top: 26px; font-family: 'Plex'; font-size: 30px; color: #a7adb8; }
   #end .note { position: absolute; bottom: 72px; font-family: 'Plex'; font-size: 26px; color: #757b86; }
 </style>
@@ -48,19 +57,25 @@
   <div id="hook" class="caption"><div>Claude Code ile<br />ne kadar çalıştığını<br /><em>biliyor musun?</em></div></div>
   <div id="top" class="caption"></div>
   <div id="window">
-    <!-- Each screen at the width where its subject reads best once the camera closes in. -->
-    <iframe id="overview" src="/" title="Genel bakış" style="width: 1360px"></iframe>
-    <iframe id="project" title="Proje" style="width: 1024px; height: 4600px"></iframe>
-    <iframe id="tips" src="/ipuclari" title="İpuçları" style="width: 920px"></iframe>
-    <iframe id="session" title="Oturum" style="width: 900px"></iframe>
-    <iframe id="year" src="/yil-ozeti" title="Yıl özeti" style="width: 1200px"></iframe>
+    <div id="titlebar">
+      <span class="lights"><i style="background: #ff5f57"></i><i style="background: #febc2e"></i><i style="background: #28c840"></i></span>
+      Wiener Lens
+    </div>
+    <div id="view">
+      <iframe id="overview" src="/" title="Genel bakış"></iframe>
+      <iframe id="project" title="Proje"></iframe>
+      <iframe id="session" title="Oturum"></iframe>
+      <iframe id="history" title="Silinmiş oturum"></iframe>
+      <iframe id="tips" src="/ipuclari" title="İpuçları"></iframe>
+      <iframe id="year" src="/yil-ozeti" title="Yıl özeti"></iframe>
+    </div>
   </div>
   <div id="brand">
     <svg viewBox="0 0 607 424" height="22" fill="#a7adb8" aria-hidden="true"><path fill-rule="evenodd" d="M2 0 122 1 122 279 127 291 134 298 148 303 221 302 233 296 233 294 238 290 242 281 243 1 363 1 365 281 370 292 372 292 377 298 386 302 485 304 485 424 364 424 253 312 248 316 243 328 242 424 121 424 117 421 11 315 4 304 1 295 0 2Z M487 0 605 0 607 2 607 177 601 189 545 243 488 243 486 241 486 183 533 182 541 178 546 169 546 122 487 122 485 119Z"/></svg>
     Wiener Lens
   </div>
   <div id="end">
-    <svg viewBox="0 0 607 424" height="76" fill="#eceef2" aria-hidden="true"><path fill-rule="evenodd" d="M2 0 122 1 122 279 127 291 134 298 148 303 221 302 233 296 233 294 238 290 242 281 243 1 363 1 365 281 370 292 372 292 377 298 386 302 485 304 485 424 364 424 253 312 248 316 243 328 242 424 121 424 117 421 11 315 4 304 1 295 0 2Z M487 0 605 0 607 2 607 177 601 189 545 243 488 243 486 241 486 183 533 182 541 178 546 169 546 122 487 122 485 119Z"/></svg>
+    <img src="icon-512.png" alt="" />
     <h2>Wiener Lens</h2>
     <div class="cmd">npx wiener-tools-lens</div>
     <div class="url">lens.wienerlabs.xyz</div>
@@ -70,104 +85,157 @@
 <script>
   const params = new URLSearchParams(location.search)
   document.getElementById('session').src = `/oturumlar/${params.get('oturum')}`
+  document.getElementById('history').src = `/oturumlar/${params.get('gecmis')}`
   document.getElementById('project').src = `/projeler/${encodeURIComponent(params.get('proje') ?? '')}`
-  const W = 920
+  /** The window's content area, and the app's size inside it: the whole app at 0.75. */
+  const W = 960
   const H = 860
+  const APP_W = 1280
+  const APP_H = 1147
 
-  // Scenes, in seconds: from the whole year down to one session, then advice, then the year's
-  // card. Captions sit above the window; the hook and the end card fill the frame.
+  // Scenes, in seconds: from the whole year down to one session, the history Claude Code deleted,
+  // then advice, then the year's card. Each starts on the whole window and ends on it again, so
+  // the move from one screen to the next reads as using the app.
   const SCENES = [
-    { id: 'overview', from: 3.0, to: 8.4, caption: 'Bir yıllık çalışman, <em>gün gün.</em>' },
-    { id: 'project', from: 8.4, to: 14.6, caption: 'Her projen, <em>ayrı ayrı.</em>' },
-    { id: 'session', from: 14.6, to: 20.4, caption: 'Her oturum, <em>adım adım.</em>' },
-    { id: 'tips', from: 20.4, to: 26.2, caption: 'Paranın nereye gittiğini<br>ve <em>ne yapacağını</em> söyler.' },
-    { id: 'year', from: 26.2, to: 30.6, caption: 'Yılın, <em>tek kartta.</em>' },
+    { id: 'overview', from: 3.0, to: 8.8, caption: 'Bir yıllık çalışman, <em>gün gün.</em>' },
+    { id: 'project', from: 8.8, to: 15.0, caption: 'Her projen, <em>ayrı ayrı.</em>' },
+    { id: 'session', from: 15.0, to: 20.8, caption: 'Her oturum, <em>adım adım.</em>' },
+    { id: 'history', from: 20.8, to: 25.6, caption: 'Claude Code silse de<br /><em>geçmişin burada.</em>' },
+    { id: 'tips', from: 25.6, to: 31.2, caption: 'Paranın nereye gittiğini<br />ve <em>ne yapacağını</em> söyler.' },
+    { id: 'year', from: 31.2, to: 35.6, caption: 'Yılın, <em>tek kartta.</em>' },
   ]
-  const END = 30.6
-  const DURATION = 34.3
+  const END = 35.6
+  const DURATION = 39.3
 
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
   const ramp = (t, a, b) => clamp((t - a) / (b - a))
   const ease = (x) => 0.5 - Math.cos(Math.PI * x) / 2
   const mix = (a, b, k) => a + (b - a) * k
 
-  /** Camera paths, measured once the screens have loaded: [start, end] regions in page pixels. */
-  const paths = {}
+  /** Camera keyframes per scene, measured once the screens have loaded: [time, region] in page pixels. */
+  const keys = {}
+  /** How far each screen can scroll. */
+  const maxScroll = {}
   const rectOf = (frame, el) => {
     const r = el.getBoundingClientRect()
     return { x: r.left + frame.contentWindow.scrollX, y: r.top + frame.contentWindow.scrollY, w: r.width, h: r.height }
   }
-  const around = (r, pad, w = r.w + pad * 2) => ({ x: r.x + r.w / 2 - w / 2, y: r.y - pad, w })
-
   /** Height of a region `w` page pixels wide, at the window's proportions. */
   const tall = (w) => (H * w) / W
+  const whole = (y = 0) => ({ x: 0, y, w: APP_W })
 
   function measure() {
     const f = (id) => document.getElementById(id)
     const doc = (id) => f(id).contentDocument
+    for (const s of SCENES) maxScroll[s.id] = Math.max(0, doc(s.id).documentElement.scrollHeight - APP_H)
+    // Never past the foot of the page.
+    const fit = (id, r) => ({ ...r, y: clamp(r.y, 0, maxScroll[id] + APP_H - tall(r.w)) })
+    /** The whole window, then in on a, along to b, and back out to the whole window at the end. */
+    const scene = (id, a, b, hold = 0) => {
+      const s = SCENES.find((x) => x.id === id)
+      const A = fit(id, a)
+      const B = fit(id, b)
+      const out = whole(clamp(B.y - 60, 0, maxScroll[id]))
+      keys[id] = [[s.from, whole()], [s.from + 0.55, whole()], [s.from + 1.5, A], [s.from + 1.5 + hold, A], [s.to - 1.15, B], [s.to - 0.4, out]]
+    }
+
     // Overview: the heading over the year's calendar, then in on the busy recent months.
     const h = rectOf(f('overview'), doc('overview').querySelector('main h1'))
     const c = rectOf(f('overview'), doc('overview').querySelector('main section'))
     const close = c.w * 0.56
-    paths.overview = [
-      { x: c.x - 28, y: h.y - 44, w: c.w + 56 },
-      { x: c.x + c.w - close + 16, y: c.y + c.h / 2 - tall(close) / 2, w: close },
-    ]
-    // Project: its name and numbers, then down to what it cost day by day and in which languages.
+    scene('overview', { x: c.x - 28, y: h.y - 44, w: c.w + 56 }, { x: c.x + c.w - close + 16, y: c.y + c.h / 2 - tall(close) / 2, w: close })
+    // The first scene opens as the window rises: no rest on the whole window.
+    keys.overview[1][0] = 3.2
+
+    // Project: in on its name and numbers, then down the whole page at an even pace for the rest
+    // of the scene, to where its content ends.
     const pd = doc('project')
     const ph = rectOf(f('project'), pd.querySelector('main h1'))
     const pm = rectOf(f('project'), pd.querySelector('main'))
-    // Down the page at reading pace, from the name and numbers through the calendar, the cost
-    // chart and languages, the files and tools, as far as the scene's time allows.
     const pageW = pm.w - 16
-    // The page is as tall as the frame it sits in; stop where its content ends, not at the frame's foot.
-    const content = rectOf(f('project'), pd.querySelector('main').lastElementChild)
+    // The last child on screen: the phone-only footer after it takes no space here.
+    const shown = [...pd.querySelector('main').children].filter((el) => el.getClientRects().length > 0)
+    const content = rectOf(f('project'), shown[shown.length - 1])
     const bottom = content.y + content.h + 32 - tall(pageW)
-    paths.project = [
-      { x: pm.x + 8, y: ph.y - 40, w: pageW },
-      0.1,
-      { x: pm.x + 8, y: Math.min(bottom, ph.y - 40 + 2300), w: pageW },
+    const ps = SCENES.find((x) => x.id === 'project')
+    const pa = fit('project', { x: pm.x + 8, y: ph.y - 40, w: pageW })
+    const pb = fit('project', { x: pm.x + 8, y: bottom, w: pageW })
+    keys.project = [
+      [ps.from, whole()], [ps.from + 0.4, whole()], [ps.from + 1.2, pa],
+      [ps.to - 0.95, pb, 'glide'], [ps.to - 0.35, whole(clamp(pb.y - 60, 0, maxScroll.project))],
     ]
-    // Tips: the first card whole, then a step in on what it found and what it is worth.
-    const card = rectOf(f('tips'), doc('tips').querySelector('main section[id]'))
-    paths.tips = [around(card, 22), { x: card.x + 18, y: card.y + 8, w: card.w - 36 }]
-    // Session: down the transcript, from the title and the question to Claude's summary.
-    // The session list is hidden at this width, its heading too; take the one on screen.
+
+    // Session: the transcript pane beside the list, from the title and the question down to the
+    // failing test, the fix and Claude's summary.
     const d = doc('session')
-    const titleEl = [...d.querySelectorAll('main h1')].find((el) => el.getClientRects().length > 0)
+    // The transcript's own heading, not the list's.
+    const titleEl = [...d.querySelectorAll('main article h1')].find((el) => el.getClientRects().length > 0)
     const title = rectOf(f('session'), titleEl)
-    const main = rectOf(f('session'), d.querySelector('main'))
+    const pane = rectOf(f('session'), titleEl.closest('section'))
     const summary = [...d.querySelectorAll('main p, main div')].find((el) => el.childElementCount === 0 && el.textContent.startsWith('Sebep: iki istek'))
     const sum = rectOf(f('session'), summary ?? titleEl)
-    // The failing test: from there to the summary is the part worth watching.
     const failing = [...d.querySelectorAll('main button')].find((el) => el.textContent.includes('go test') && el.textContent.includes('hata'))
     const fail = rectOf(f('session'), failing ?? titleEl)
-    const wide = main.w - 40
+    const wide = pane.w + 24
     const fromFail = fail.y - 70
     const toSummary = sum.y + sum.h + 50 - tall(wide)
-    // Rest on the title and the question, then glide down to the failing test and the fix.
-    paths.session = [
-      { x: main.x + 20, y: title.y - 40, w: wide },
-      0.3,
-      // Start at the failing test if the summary still fits below; otherwise keep the summary in.
-      { x: main.x + 20, y: Math.max(fromFail, toSummary), w: wide },
-    ]
-    // Year: the card, a slow step closer.
+    scene('session', { x: pane.x - 12, y: title.y - 40, w: wide }, { x: pane.x - 12, y: Math.max(fromFail, toSummary), w: wide }, 0.5)
+
+    // History: an old session whose transcript Claude Code deleted; its date, then the note and
+    // the prompts that are left.
+    const hd = doc('history')
+    const hTitleEl = [...hd.querySelectorAll('main article h1')].find((el) => el.getClientRects().length > 0)
+    const hTitle = rectOf(f('history'), hTitleEl)
+    const hPane = rectOf(f('history'), hTitleEl.closest('section'))
+    // The note wraps to the pane's width, so the camera keeps the whole pane and only drifts down.
+    const note = rectOf(f('history'), [...hd.querySelectorAll('main p')].find((el) => el.textContent.includes('history.jsonl')))
+    scene('history', { x: hPane.x - 12, y: hTitle.y - 40, w: hPane.w + 24 }, { x: hPane.x - 6, y: Math.min(note.y - 160, hTitle.y + 40), w: hPane.w + 12 }, 0.3)
+
+    // Tips: the first card whole, then a step in on what it found and what it is worth.
+    const card = rectOf(f('tips'), doc('tips').querySelector('main section[id]'))
+    scene('tips', { x: card.x - 22, y: card.y - 22, w: card.w + 44 }, { x: card.x + 18, y: card.y + 8, w: card.w - 36 }, 0.4)
+
+    // Year: the card, a slow step closer; the window fades out on it.
     const yr = rectOf(f('year'), doc('year').querySelector('svg[aria-label$="yıl özeti kartı"]'))
     const centered = (pad) => {
       const w = yr.w + pad * 2
       return { x: yr.x - pad, y: yr.y + yr.h / 2 - tall(w) / 2, w }
     }
-    paths.year = [centered(30), centered(4)]
+    const ys = SCENES.find((x) => x.id === 'year')
+    keys.year = [[ys.from, whole()], [ys.from + 0.55, whole()], [ys.from + 1.5, fit('year', centered(30))], [END, fit('year', centered(4))]]
   }
 
-  /** A path is two regions, or [region, hold until, region] to rest on the first a while. */
-  function camera(id, p) {
-    const path = paths[id]
-    const [a, b, k] = path.length === 3 ? [path[0], path[2], ease(ramp(p, path[1], 1))] : [path[0], path[1], ease(p)]
-    const r = { x: mix(a.x, b.x, k), y: mix(a.y, b.y, k), w: mix(a.w, b.w, k) }
+  /** Even speed with short starts and stops, for a long scroll: velocity ramps over the first and last `a`. */
+  const glide = (x, a = 0.12) => {
+    const v = 1 / (1 - a)
+    if (x < a) return (v * x * x) / (2 * a)
+    if (x > 1 - a) return 1 - (v * (1 - x) * (1 - x)) / (2 * a)
+    return v * (x - a / 2)
+  }
+
+  /** The camera at time t: the region between the two keyframes around it. */
+  function regionAt(id, t) {
+    const k = keys[id]
+    if (t <= k[0][0]) return k[0][1]
+    for (let i = 1; i < k.length; i++) {
+      const [t1, b, how] = k[i]
+      const [t0, a] = k[i - 1]
+      if (t <= t1) {
+        const e = (how === 'glide' ? glide : ease)(ramp(t, t0, t1))
+        return { x: mix(a.x, b.x, e), y: mix(a.y, b.y, e), w: mix(a.w, b.w, e) }
+      }
+    }
+    return k[k.length - 1][1]
+  }
+
+  /** Scrolls the screen to the region and scales it into the window; the sidebar stays put, as in the app. */
+  function place(id, t) {
+    const el = document.getElementById(id)
+    const r = regionAt(id, t)
     const s = W / r.w
-    return `translate(${-r.x * s}px, ${-r.y * s}px) scale(${s})`
+    const top = Math.floor(clamp(r.y, 0, maxScroll[id]))
+    if (el.contentWindow.scrollY !== top) el.contentWindow.scrollTo(0, top)
+    el.style.transform = `translate(${-r.x * s}px, ${-(r.y - top) * s}px) scale(${s})`
   }
 
   window.render = (t) => {
@@ -190,13 +258,15 @@
     win.style.transform = `translateY(${(1 - winIn) * 70}px) scale(${1 - winOut * 0.03})`
     brand.style.opacity = String(winIn * (1 - winOut))
 
-    // Screens: crossfade between scenes, each with its own slow camera move.
+    // Screens: a short crossfade on the whole window between scenes, each with its own camera.
     for (const s of SCENES) {
       const el = document.getElementById(s.id)
-      const fadeIn = s.from <= 3.0 ? 1 : ease(ramp(t, s.from - 0.25, s.from + 0.25))
-      const fadeOut = s.to >= END ? 0 : ease(ramp(t, s.to - 0.25, s.to + 0.25))
-      el.style.opacity = String(fadeIn * (1 - fadeOut))
-      el.style.transform = camera(s.id, ramp(t, s.from + 0.35, s.to - 0.15))
+      const fadeIn = s.from <= 3.0 ? 1 : ease(ramp(t, s.from - 0.2, s.from + 0.2))
+      const fadeOut = s.to >= END ? 0 : ease(ramp(t, s.to - 0.2, s.to + 0.2))
+      const o = fadeIn * (1 - fadeOut)
+      el.style.opacity = String(o)
+      el.style.visibility = o > 0 ? 'visible' : 'hidden'
+      if (o > 0) place(s.id, t)
     }
 
     // Caption of the current scene.
@@ -223,11 +293,17 @@
   const ready = {
     overview: (d) => /mesaj/.test(d.querySelector('main h1')?.textContent ?? ''),
     project: (d) => [...d.querySelectorAll('main h2')].some((el) => el.textContent.trim() === 'Diller'),
-    tips: (d) => !!d.querySelector('main section[id]'),
     session: (d) => (d.querySelector('main')?.textContent ?? '').includes('Sebep: iki istek'),
+    history: (d) => (d.querySelector('main')?.textContent ?? '').includes('history.jsonl'),
+    tips: (d) => !!d.querySelector('main section[id]'),
     year: (d) => !!d.querySelector('svg[aria-label$="yıl özeti kartı"]'),
   }
-  const css = 'main > div:first-child:has(button[aria-label*="kopyala"]) { display: none !important } html { scrollbar-width: none } ::-webkit-scrollbar { display: none }'
+  // What only the public demo shows: its banner, its badge and the install button.
+  const css = [
+    'main > div:first-child:has(button[aria-label*="kopyala"]) { display: none !important }',
+    '[title="Bu sayfadaki veriler uydurma"], div:has(> button[title^="Paneli kendi penceresi"]) { display: none !important }',
+    'html { scrollbar-width: none; scroll-behavior: auto !important } ::-webkit-scrollbar { display: none }',
+  ].join('\n')
   window.stageReady = false
   const poll = setInterval(() => {
     const all = Object.entries(ready).every(([id, ok]) => {
@@ -241,7 +317,7 @@
     for (const id of Object.keys(ready)) {
       const d = document.getElementById(id).contentDocument
       const style = d.createElement('style')
-      style.textContent = css + (only[id] ?? '')
+      style.textContent = `${css}\n${only[id] ?? ''}`
       d.head.appendChild(style)
     }
     setTimeout(() => {
