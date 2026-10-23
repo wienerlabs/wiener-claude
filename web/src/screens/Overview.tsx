@@ -1,6 +1,6 @@
 import { ArrowUpRight, CircleAlert, X } from 'lucide-react'
 import { withPossessive } from '../../../shared/tr.ts'
-import type { DayDetail, HeatmapResponse, HeatmapView, IndexStatus, Insight, Metric, PeriodTotals, RangeKey, Summary, TipsReport } from '../../../shared/types.ts'
+import type { DayDetail, HeatmapResponse, HeatmapView, IndexStatus, Insight, Metric, PeriodTotals, RangeKey, SessionForecast, Summary, TipsReport } from '../../../shared/types.ts'
 import { Calendar } from '../components/heatmap/Calendar.tsx'
 import { ProjectDay } from '../components/heatmap/ProjectDay.tsx'
 import { WeekHour } from '../components/heatmap/WeekHour.tsx'
@@ -393,6 +393,7 @@ function LivePanel({ live }: { live: Summary['live'] | null }) {
                   {l.projectName ?? tx('Bilinmeyen proje', 'Unknown project')} · {l.status === 'busy' ? tx('çalışıyor', 'working') : tx('bekliyor', 'waiting')}
                   {l.updatedAt ? ` · ${fmtRelative(l.updatedAt)}` : ''}
                 </span>
+                {l.forecast ? <span className="block text-[12px] text-ink-2">{promptsLeft(l.forecast)}</span> : null}
               </span>
               <ArrowUpRight className="size-4 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
             </a>
@@ -401,6 +402,22 @@ function LivePanel({ live }: { live: Summary['live'] | null }) {
       </ul>
     </Card>
   )
+}
+
+/** "Bu hızla yaklaşık 3–4 prompt sonra 5 saatlik limit dolar." */
+export function promptsLeft(f: SessionForecast): string {
+  const five = f.limit === 'five_hour'
+  if (f.high < 1) {
+    return five ? tx('5 saatlik limit dolmak üzere.', 'The 5-hour limit is about to fill.') : tx('Haftalık limit dolmak üzere.', 'The weekly limit is about to fill.')
+  }
+  // From prompts as costly as the dearer recent ones to typical ones; past 30 the count stops mattering.
+  const low = Math.max(1, Math.min(30, f.low))
+  const high = Math.min(30, f.high)
+  const more = f.high > 30 ? '+' : ''
+  const range = low >= 30 ? '30+' : low === high ? `${fmtInt(high)}${more}` : `${fmtInt(low)}–${fmtInt(high)}${more}`
+  return five
+    ? tx(`Bu hızla yaklaşık ${range} prompt sonra 5 saatlik limit dolar.`, `At this pace, the 5-hour limit fills in about ${range} ${f.high === 1 ? 'prompt' : 'prompts'}.`)
+    : tx(`Bu hızla yaklaşık ${range} prompt sonra haftalık limit dolar.`, `At this pace, the weekly limit fills in about ${range} ${f.high === 1 ? 'prompt' : 'prompts'}.`)
 }
 
 function EmptyState() {

@@ -72,9 +72,23 @@ Suggestions drawn from your transcripts with local rules, sorted by estimated sa
 
 Which tools Claude uses and how often, and how many of those calls fail; the split by kind; MCP servers, skills and subagents and their share of cost; slash commands; how many sessions use features such as plan mode and compaction; Claude Code versions.
 
-### Cost and limits
+### Cost
 
-The cost of the selected period and the change from the previous one, a month-end projection, a monthly budget and the day you would pass it at this pace, a daily or weekly cost chart, how the money splits across token types and models, cache savings, the times you hit a limit and the current 5-hour window.
+The cost of the selected period and the change from the previous one, a month-end projection, a monthly budget and the day you would pass it at this pace, a daily or weekly cost chart, how the money splits across token types and models, and cache savings.
+
+### Limits
+
+How full the 5-hour and weekly limits are, when each fills at your recent pace or where it stands when it resets, and about how much work at list price still fits; open sessions with roughly how many prompts like their recent ones they have left; the current 5-hour window and the last 7 days from local records; and the times you hit a limit.
+
+Anthropic reports the 5-hour and weekly limits as percentages, not tokens. Wiener Lens reads those percentages where they are saved on your computer: the Claude desktop app keeps a reading every so often while it runs, and Claude Code keeps an occasional one in `~/.claude.json`. Comparing how the percentage rose between two readings with the list price of the calls made in between, it learns how far a dollar of work moves each limit on your plan, and carries the last reading forward with what you have spent since. Percentages carried forward this way are marked "estimated". No setup is needed if you use the desktop app. Usage in claude.ai chats counts toward the same limits but isn't in local records, so the estimate can run low if you chat a lot.
+
+If you only use Claude Code in the terminal, readings come from its status line instead, after every response. Wiener Lens ships one that records them in its own folder; add it to `~/.claude/settings.json`:
+
+```json
+"statusLine": { "type": "command", "command": "node ~/.wiener-tools/claude/statusline.mjs" }
+```
+
+If you already have a status line, keep it: `node ~/.wiener-tools/claude/statusline.mjs -- <your command>` records the reading and shows your output.
 
 ### Projects
 

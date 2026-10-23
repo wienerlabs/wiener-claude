@@ -6,11 +6,12 @@ import { type Context, Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { type Lang, isLang, pick } from '../shared/i18n.ts'
 import type { HeatmapView, Metric, ReplayPage, SessionSource } from '../shared/types.ts'
-import { accountInfo, listAccounts } from './accounts.ts'
+import { accountInfo, desktopReadings, listAccounts } from './accounts.ts'
 import type { Db } from './db.ts'
 import type { Indexer } from './indexer.ts'
-import { costReport, readAccount } from './costs.ts'
+import { costReport, limits, readAccount } from './costs.ts'
 import { envReport, fileContent } from './env.ts'
+import { type Stream, limitForecast, readSamples, samplesFile, scopedSamples, sessionForecast } from './forecast.ts'
 import { liveSessions } from './live.ts'
 import { desktopSessionsDir } from './paths.ts'
 import type { Pricing } from './pricing.ts'
@@ -22,6 +23,7 @@ import { tipsReport } from './tips.ts'
 import { toolsReport } from './tools.ts'
 import { yearReport } from './year.ts'
 import { SettingsError, readSettings, updateSettings } from './settings.ts'
+import { statusLineCommand, statusLineConfigured } from './statusline.ts'
 
 export interface AppContext {
   db: Db
@@ -110,9 +112,33 @@ export function createApp(ctx: AppContext): Hono {
 
   app.get('/api/accounts', (c) => c.json(listAccounts(db, langOf(c))))
 
+  /** Every place usage readings come from, for the account in view or for all of them. */
+  const forecastFor = (scoped: Db, account: string | null, now: number) => {
+    const statusLine = readSamples(samplesFile(), now)
+    const streams: Stream[] = [{ source: 'statusline', samples: account ? scopedSamples(scoped, statusLine) : statusLine, db: scoped }]
+    const desktopDir = desktopSessionsDir()
+    for (const r of desktopDir ? desktopReadings(desktopDir) : []) {
+      if (account && r.owner !== account) continue
+      // With every account in view, an organization's readings still go with its own account's calls.
+      const own = !account && r.owner ? (ctx.accountDb?.(r.owner) ?? scoped) : scoped
+      streams.push({ source: 'desktop', samples: r.samples, db: own })
+    }
+    const usage = (account ? accountInfo(db, account) : readAccount())?.usage
+    if (usage) {
+      streams.push({
+        source: 'account', db: scoped,
+        samples: [{ t: usage.fetchedAt, session: null, fh: usage.fiveHour?.percent ?? null, fr: usage.fiveHour?.resetsAt ?? null, sd: usage.sevenDay?.percent ?? null, sr: usage.sevenDay?.resetsAt ?? null }],
+      })
+    }
+    return limitForecast(streams, now)
+  }
+
   app.get('/api/summary', async (c) => {
     const { db, account } = scopeOf(c)
-    return c.json(q.summary(db, await liveSessions(db, account !== null)))
+    const now = Date.now()
+    const forecast = forecastFor(db, account, now)
+    const live = (await liveSessions(db, account !== null)).map((l) => ({ ...l, forecast: sessionForecast(db, l.sessionId, forecast, now) }))
+    return c.json(q.summary(db, live))
   })
 
   const badDate = (c: Context) => c.json({ error: pick(langOf(c), 'Tarih YYYY-AA-GG biçiminde olmalı', 'Dates must be in YYYY-MM-DD format') }, 400)
@@ -193,10 +219,19 @@ export function createApp(ctx: AppContext): Hono {
     return c.json(yearReport(scopeOf(c).db, Number.isInteger(year) && year > 2000 && year < 3000 ? year : new Date().getFullYear()))
   })
 
+  app.get('/api/statusline', (c) => c.json({ command: statusLineCommand(), configured: statusLineConfigured() }))
+
   app.get('/api/costs', (c) => {
     const { db: scoped, account } = scopeOf(c)
     const info = account ? accountInfo(db, account, desktopSessionsDir()) : readAccount()
     return c.json(costReport(scoped, ctx.pricing, info, Date.now(), readSettings().monthlyBudget, parseRange(c.req.query('range'), '30d')))
+  })
+
+  app.get('/api/limits', (c) => {
+    const { db: scoped, account } = scopeOf(c)
+    const info = account ? accountInfo(db, account, desktopSessionsDir()) : readAccount()
+    const now = Date.now()
+    return c.json(limits(scoped, info, now, forecastFor(scoped, account, now)))
   })
 
   app.get('/api/sessions', (c) => {

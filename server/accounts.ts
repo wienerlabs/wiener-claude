@@ -4,6 +4,7 @@ import { type Lang, pick } from '../shared/i18n.ts'
 import type { Account } from '../shared/types.ts'
 import { type AccountInfo, accountFile, planOf, readAccount } from './costs.ts'
 import { ACCOUNT_ID, type Db, UNKNOWN_ACCOUNT, getMeta, openAccountDb, setMeta } from './db.ts'
+import type { LimitSample } from './forecast.ts'
 
 interface LearnedAccount {
   label: string
@@ -72,14 +73,44 @@ const listDir = (dir: string): string[] => {
   }
 }
 
-function ownOrgs(desktopDir: string, account: string): Set<string> {
+/** Each organization whose sessions sit under exactly one account folder, and that account. */
+function orgOwners(desktopDir: string): Map<string, string> {
   const holders = new Map<string, string[]>()
   for (const acct of listDir(desktopDir)) {
     for (const org of listDir(path.join(desktopDir, acct))) {
       if (listDir(path.join(desktopDir, acct, org)).some((f) => f.startsWith('local_') && f.endsWith('.json'))) holders.set(org, [...(holders.get(org) ?? []), acct])
     }
   }
-  return new Set([...holders].filter(([, accts]) => accts.length === 1 && accts[0] === account).map(([org]) => org))
+  return new Map([...holders].filter(([, accts]) => accts.length === 1).map(([org, accts]) => [org, accts[0] as string]))
+}
+
+function ownOrgs(desktopDir: string, account: string): Set<string> {
+  return new Set([...orgOwners(desktopDir)].filter(([, owner]) => owner === account).map(([org]) => org))
+}
+
+/**
+ * The desktop app's own usage readings, about every 15 minutes while it runs, per organization:
+ * how full the 5-hour and weekly limits were, without reset times. `owner` is the account the
+ * organization belongs to, when that is clear.
+ */
+export function desktopReadings(desktopDir: string): { org: string; owner: string | null; samples: LimitSample[] }[] {
+  let samples: unknown
+  try {
+    samples = (JSON.parse(fs.readFileSync(path.join(path.dirname(desktopDir), 'plan-usage-history.json'), 'utf8')) as Record<string, unknown>).samples
+  } catch {
+    return []
+  }
+  const owners = orgOwners(desktopDir)
+  const byOrg = new Map<string, LimitSample[]>()
+  const pct = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  for (const s of Array.isArray(samples) ? (samples as (Record<string, unknown> | null)[]) : []) {
+    const u = (s?.u ?? {}) as Record<string, unknown>
+    if (typeof s?.t !== 'number' || typeof s.org !== 'string' || (pct(u.fh) === null && pct(u.sd) === null)) continue
+    const list = byOrg.get(s.org) ?? []
+    list.push({ t: s.t, session: null, fh: pct(u.fh), fr: null, sd: pct(u.sd), sr: null })
+    byOrg.set(s.org, list)
+  }
+  return [...byOrg].map(([org, list]) => ({ org, owner: owners.get(org) ?? null, samples: list.sort((a, b) => a.t - b.t) }))
 }
 
 function sampledUsage(desktopDir: string, account: string): AccountInfo['usage'] {

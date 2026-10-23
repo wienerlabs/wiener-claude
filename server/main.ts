@@ -12,8 +12,9 @@ import { openDb } from './db.ts'
 import { Indexer } from './indexer.ts'
 import { coworkSessionsDir, dataDir, desktopSessionsDir, historyFile, liveSessionsDir, projectsDir, terminalLang } from './paths.ts'
 import { Pricing } from './pricing.ts'
+import { installStatusLine } from './statusline.ts'
 
-const VERSION = '0.8.0'
+const VERSION = '0.9.0'
 const LANG = terminalLang()
 const L = (tr: string, en: string) => pick(LANG, tr, en)
 
@@ -104,6 +105,7 @@ function openBrowser(url: string): void {
 
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2))
+  installStatusLine()
   const dbFile = path.join(dataDir(), 'index.db')
   const db = openDb(dbFile)
   const pricing = Pricing.load()

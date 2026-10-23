@@ -57,6 +57,7 @@ export interface LiveSession {
   title: string | null
   status: string | null
   updatedAt: number | null
+  forecast?: SessionForecast | null
 }
 
 export interface HeatmapCell {
@@ -228,6 +229,43 @@ export interface LimitHit {
   resetsAt: number | null
 }
 
+/** One usage window, from the status line's readings, with where it is heading. */
+export interface WindowForecast {
+  percent: number
+  /** True when the percentage is carried forward from an older reading with local spending. */
+  estimated: boolean
+  resetsAt: number | null
+  /** When the reading it rests on was taken, and where it came from. */
+  measuredAt: number
+  source: 'statusline' | 'desktop' | 'account'
+  /** Percentage points per hour at the recent pace; 0 when idle, null when unknown. */
+  pace: number | null
+  /** When the window fills at that pace, if that comes before it resets. */
+  fillsAt: number | null
+  /** Where the percentage stands when the window resets, when it doesn't fill before. */
+  atReset: number | null
+  /** List-price dollars of work left before it fills; null until enough readings line up with local calls. */
+  leftUsd: number | null
+}
+
+export interface LimitForecast {
+  /** The most recent usage reading from any source; null when there is none. */
+  lastReadingAt: number | null
+  fiveHour: WindowForecast | null
+  sevenDay: WindowForecast | null
+}
+
+/** Roughly how many prompts like its recent ones a running session has left before a limit fills. */
+export interface SessionForecast {
+  sessionId: string
+  /** The limit that fills first. */
+  limit: 'five_hour' | 'seven_day'
+  low: number
+  high: number
+  /** What one of its recent prompts typically cost, at list price. */
+  perPrompt: number
+}
+
 export interface Limits {
   /** "Max 5x", "Pro", … from the local account file; null when unknown. */
   plan: string | null
@@ -242,6 +280,7 @@ export interface Limits {
   block: { start: number; end: number; cost: number; messages: number } | null
   rolling7: { cost: number; atLastWeeklyHit: { at: number; cost: number } | null }
   hits: LimitHit[]
+  forecast: LimitForecast
 }
 
 export interface Budget {
@@ -268,7 +307,6 @@ export interface CostReport {
   /** Token counts behind the mix, for the same range. */
   tokens: TokenTotals
   projects: { key: string; name: string; cost: number }[]
-  limits: Limits
 }
 
 export interface ProjectSummary {
